@@ -1,14 +1,16 @@
 #! /usr/bin/env python3
 
-import requests
 import os
 import re
 from collections import OrderedDict
-from requests import codes as status
-from optparse import OptionParser
 from concurrent.futures import ThreadPoolExecutor
-from threading import Lock
+from optparse import OptionParser
 from sys import stdout, stderr
+from threading import Lock
+
+import m3u8
+import requests
+from requests import codes as status
 
 
 class Chunk:
@@ -121,6 +123,7 @@ def getFrom(resource):
 
 
 def chunksWithOffsets(vodLinks):
+    playlist = m3u8.loads(vodLinks)
     links = filter(lambda line: line and not line.startswith('#'), vodLinks.split('\n'))
     chunksWithEndOffsets = map(parseLink, links)
     return OrderedDict(chunksWithEndOffsets)
