@@ -11,6 +11,7 @@ from threading import Lock
 import m3u8
 import requests
 from requests import codes as status
+from urllib.parse import urlparse, parse_qs
 
 
 class Chunk:
@@ -124,14 +125,14 @@ def getFrom(resource):
 
 def chunksWithOffsets(vodLinks):
     playlist = m3u8.loads(vodLinks)
-    links = filter(lambda line: line and not line.startswith('#'), vodLinks.split('\n'))
-    chunksWithEndOffsets = map(parseLink, links)
+    chunksWithEndOffsets = map(parseSegment, playlist.segments)
     return OrderedDict(chunksWithEndOffsets)
 
 
-def parseLink(link):
-    (chunkName, offsets) = link.split('?')
-    endOffset = offsets.split('&')[1].split('=')[1]
+def parseSegment(segment):
+    parsedLink = urlparse(segment.uri)
+    chunkName = parsedLink.path
+    endOffset = parse_qs(parsedLink.query)['end_offset'][0]
     return (chunkName, endOffset)
 
 
