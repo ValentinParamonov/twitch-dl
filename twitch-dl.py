@@ -166,12 +166,12 @@ def createFile(initialName):
 
 
 def findSuitable(fileName):
-    mod = 0
+    modifier = 0
     newName = fileName
     while os.path.isfile(newName):
-        mod += 1
-        newName = re.sub(r'.ts$', ' {:02}.ts'.format(mod), fileName)
-    return fileName if mod == 0 else newName
+        modifier += 1
+        newName = re.sub(r'.ts$', ' {:02}.ts'.format(modifier), fileName)
+    return fileName if modifier == 0 else newName
 
 
 def downloadChunkAndWriteToFile(chunk, fileName, baseUrl):
