@@ -7,16 +7,17 @@ from concurrent.futures import ThreadPoolExecutor
 from optparse import OptionParser
 from sys import stdout, stderr
 from threading import Lock
+from urllib.parse import urlparse, parse_qs
 
 import m3u8
 import requests
 from requests import codes as status
-from urllib.parse import urlparse, parse_qs
 
 
 class Chunk:
-    def __init__(self, name, localOffset, fileOffset):
+    def __init__(self, name, duration, localOffset, fileOffset):
         self.name = name
+        self.duration = duration
         self.localOffset = localOffset
         self.fileOffset = fileOffset
 
@@ -56,7 +57,7 @@ def main():
     vodId = vodIdFromArgs()
     fileName = createFile(vodName(vodId) + '.ts')
     sourceQualityLink = sourceQualityLinkIn(playlistsFor(vodId))
-    (chunks, totalBytes) = withFileOffsets(chunksWithOffsets(contentsOf(sourceQualityLink)))
+    (chunks, totalBytes, totalDuration) = withFileOffsets(chunksWithOffsets(contentsOf(sourceQualityLink)))
     baseUrl = sourceQualityLink.rsplit('/', 1)[0]
     progressBar = ProgressBar(fileName, totalBytes)
     downLoadFileFromChunks(fileName, chunks, baseUrl)
@@ -133,7 +134,7 @@ def parseSegment(segment):
     parsedLink = urlparse(segment.uri)
     chunkName = parsedLink.path
     endOffset = parse_qs(parsedLink.query)['end_offset'][0]
-    return (chunkName, endOffset)
+    return (chunkName, (segment.duration, endOffset))
 
 
 def vodName(vodId):
@@ -146,11 +147,13 @@ def jsonOf(resource):
 
 def withFileOffsets(chunksWithOffsets):
     fileOffset = 0
+    totalDuration = 0
     chunks = []
-    for chunk, offset in chunksWithOffsets.items():
-        chunks.append(Chunk(chunk, offset, fileOffset))
+    for chunk, (duration, offset) in chunksWithOffsets.items():
+        chunks.append(Chunk(chunk, duration, offset, fileOffset))
         fileOffset += int(offset) + 1
-    return (chunks, fileOffset)
+        totalDuration += float(duration)
+    return (chunks, fileOffset, totalDuration)
 
 
 def downLoadFileFromChunks(fileName, chunks, baseUrl):
