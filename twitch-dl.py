@@ -2,8 +2,9 @@
 
 import os
 import re
-from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+from functools import reduce
+from itertools import groupby
 from optparse import OptionParser
 from sys import stdout, stderr
 from threading import Lock
@@ -15,11 +16,11 @@ from requests import codes as status
 
 
 class Chunk:
-    def __init__(self, name, duration, localOffset, fileOffset):
+    def __init__(self, name, localOffset, fileOffset, duration):
         self.name = name
-        self.duration = duration
         self.localOffset = localOffset
         self.fileOffset = fileOffset
+        self.duration = duration
 
 
 class ProgressBar:
@@ -126,15 +127,25 @@ def getFrom(resource):
 
 def chunksWithOffsets(vodLinks):
     playlist = m3u8.loads(vodLinks)
-    chunksWithEndOffsets = map(parseSegment, playlist.segments)
-    return OrderedDict(chunksWithEndOffsets)
+    chunksWithEndOffsets = map(toChunk, playlist.segments)
+    return toUberChunks(groupby(chunksWithEndOffsets, lambda c: c[0]))
 
 
-def parseSegment(segment):
+def toUberChunks(groupedByName):
+    uberChunks = {}
+    for chunkName, chunkGroup in groupedByName:
+        chunks = list(chunkGroup)
+        uberChunkSize = chunks[-1][1]
+        uberChunkDuration = reduce(lambda sum, chunk: sum + chunk[2], chunks, 0)
+        uberChunks[chunkName] = (uberChunkSize, uberChunkDuration)
+    return uberChunks
+
+
+def toChunk(segment):
     parsedLink = urlparse(segment.uri)
     chunkName = parsedLink.path
     endOffset = parse_qs(parsedLink.query)['end_offset'][0]
-    return (chunkName, (segment.duration, endOffset))
+    return (chunkName, int(endOffset), segment.duration)
 
 
 def vodName(vodId):
@@ -149,10 +160,10 @@ def withFileOffsets(chunksWithOffsets):
     fileOffset = 0
     totalDuration = 0
     chunks = []
-    for chunk, (duration, offset) in chunksWithOffsets.items():
-        chunks.append(Chunk(chunk, duration, offset, fileOffset))
-        fileOffset += int(offset) + 1
-        totalDuration += float(duration)
+    for chunkName, (size, duration) in chunksWithOffsets.items():
+        chunks.append(Chunk(chunkName, size, fileOffset, duration))
+        fileOffset += size + 1
+        totalDuration += duration
     return (chunks, fileOffset, totalDuration)
 
 
