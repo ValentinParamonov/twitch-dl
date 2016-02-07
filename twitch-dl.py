@@ -6,9 +6,10 @@ from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from functools import reduce
 from itertools import groupby
-from optparse import OptionParser
+from optparse import OptionParser, OptionValueError
 from sys import stdout, stderr
 from threading import Lock
+from time import strptime
 from urllib.parse import urlparse, parse_qs
 
 import m3u8
@@ -52,12 +53,35 @@ class ProgressBar:
         return int(width)
 
 
+class CommandLineParser():
+    def __init__(self):
+        parser = OptionParser()
+        parser.add_option('-s', '--start_time', metavar='START', action='callback', callback=self.toSeconds, type='string')
+        parser.add_option('-e', '--end_time', metavar='END', action='callback', callback=self.toSeconds, type='string')
+        parser.usage = '%prog vod_id'
+        self.parser = parser
+
+    def toSeconds(self, option, optString, timeString, parser):
+        try:
+            time = strptime(timeString, '%H:%M:%S')
+            seconds = time.tm_hour * 3600 + time.tm_min * 60 + time.tm_sec
+            setattr(parser.values, option.dest, seconds)
+        except ValueError:
+            raise OptionValueError('invalid time format for option {}'.format(option.dest))
+
+    def parseCommandLine(self):
+        return self.parser.parse_args()
+
+    def printUsage(self):
+        self.parser.print_usage()
+
+
 progressBar = None
 
 
 def main():
     global progressBar
-    vodId = vodIdFromArgs()
+    (startTime, endTime, vodId) = parseCommandLine()
     fileName = createFile(vodName(vodId) + '.ts')
     sourceQualityLink = sourceQualityLinkIn(playlistsFor(vodId))
     (chunks, totalBytes, totalDuration) = withFileOffsets(chunksWithOffsets(contentsOf(sourceQualityLink)))
@@ -66,18 +90,17 @@ def main():
     downLoadFileFromChunks(fileName, chunks, baseUrl)
 
 
-def vodIdFromArgs():
-    parser = OptionParser()
-    (_, args) = parser.parse_args()
-    parser.usage = '%prog vod_id'
+def parseCommandLine():
+    parser = CommandLineParser()
+    (options, args) = parser.parseCommandLine()
     argCount = len(args)
     if argCount != 1:
-        parser.print_usage()
+        parser.printUsage()
         exit(1)
     try:
-        return int(args[0])
+        return (options.start_time, options.end_time, int(args[0]))
     except ValueError:
-        parser.print_usage()
+        parser.printUsage()
         exit(1)
 
 
@@ -123,8 +146,8 @@ def rawContentsOf(resource):
 def getFrom(resource):
     try:
         return requests.get(resource)
-    except ConnectionError as ce:
-        error(str(ce))
+    except Exception as e:
+        error(str(e))
 
 
 def chunksWithOffsets(vodLinks):
