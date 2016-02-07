@@ -2,6 +2,7 @@
 
 import os
 import re
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from functools import reduce
 from itertools import groupby
@@ -16,11 +17,12 @@ from requests import codes as status
 
 
 class Chunk:
-    def __init__(self, name, localOffset, fileOffset, duration):
+    def __init__(self, name, size, offset, duration, start):
         self.name = name
-        self.localOffset = localOffset
-        self.fileOffset = fileOffset
+        self.size = size
+        self.offset = offset
         self.duration = duration
+        self.start = start
 
 
 class ProgressBar:
@@ -132,11 +134,11 @@ def chunksWithOffsets(vodLinks):
 
 
 def toUberChunks(groupedByName):
-    uberChunks = {}
+    uberChunks = OrderedDict()
     for chunkName, chunkGroup in groupedByName:
         chunks = list(chunkGroup)
         uberChunkSize = chunks[-1][1]
-        uberChunkDuration = reduce(lambda sum, chunk: sum + chunk[2], chunks, 0)
+        uberChunkDuration = reduce(lambda total, chunk: total + chunk[2], chunks, 0)
         uberChunks[chunkName] = (uberChunkSize, uberChunkDuration)
     return uberChunks
 
@@ -161,7 +163,7 @@ def withFileOffsets(chunksWithOffsets):
     totalDuration = 0
     chunks = []
     for chunkName, (size, duration) in chunksWithOffsets.items():
-        chunks.append(Chunk(chunkName, size, fileOffset, duration))
+        chunks.append(Chunk(chunkName, size, fileOffset, duration, totalDuration))
         fileOffset += size + 1
         totalDuration += duration
     return (chunks, fileOffset, totalDuration)
@@ -189,8 +191,8 @@ def findSuitable(fileName):
 
 
 def downloadChunkAndWriteToFile(chunk, fileName, baseUrl):
-    chunkContents = rawContentsOf('{base}/{chunk}?start_offset=0&end_offset={end}'.format(base=baseUrl, chunk=chunk.name, end=chunk.localOffset))
-    return writeContents(chunkContents, fileName, chunk.fileOffset)
+    chunkContents = rawContentsOf('{base}/{chunk}?start_offset=0&end_offset={end}'.format(base=baseUrl, chunk=chunk.name, end=chunk.size))
+    return writeContents(chunkContents, fileName, chunk.offset)
 
 
 def writeContents(chunkContents, fileName, offset):
