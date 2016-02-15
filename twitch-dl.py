@@ -9,7 +9,6 @@ from itertools import groupby
 from optparse import OptionParser, OptionValueError
 from sys import stdout, stderr
 from threading import Lock
-from time import strptime
 from urllib.parse import urlparse, parse_qs
 
 import m3u8
@@ -54,6 +53,8 @@ class ProgressBar:
 
 
 class CommandLineParser():
+    timePattern = '^(((?P<h>0{1,2}|[1-9]\d*):)?((?P<m>[0-5]?[0-9]):))?(?P<s>[0-5]?[0-9])$'
+
     def __init__(self):
         parser = OptionParser()
         parser.add_option('-s', '--start_time', metavar='START', action='callback', callback=self.toSeconds, type='string')
@@ -63,12 +64,12 @@ class CommandLineParser():
         self.parseArgs = lambda: parser.parse_args()
 
     def toSeconds(self, option, optString, timeString, parser):
-        try:
-            time = strptime(timeString, '%H:%M:%S')
-            seconds = time.tm_hour * 3600 + time.tm_min * 60 + time.tm_sec
-            setattr(parser.values, option.dest, seconds)
-        except ValueError:
+        match = re.search(self.timePattern, timeString)
+        if not match:
             raise OptionValueError('Invalid time format for option {}'.format(option.dest))
+        ts = dict(map(lambda g: (g, int(match.group(g) or '0')), ['h', 'm', 's']))
+        seconds = ts['h'] * 3600 + ts['m'] * 60 + ts['s']
+        setattr(parser.values, option.dest, seconds)
 
     def parseCommandLine(self):
         (options, args) = self.parseArgs()
