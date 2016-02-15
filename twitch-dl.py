@@ -59,7 +59,7 @@ class CommandLineParser():
         parser.add_option('-s', '--start_time', metavar='START', action='callback', callback=self.toSeconds, type='string')
         parser.add_option('-e', '--end_time', metavar='END', action='callback', callback=self.toSeconds, type='string')
         parser.usage = '%prog vod_id'
-        self.printUsage = lambda: parser.print_usage()
+        self.getUsage = lambda: parser.get_usage()
         self.parseArgs = lambda: parser.parse_args()
 
     def toSeconds(self, option, optString, timeString, parser):
@@ -68,19 +68,18 @@ class CommandLineParser():
             seconds = time.tm_hour * 3600 + time.tm_min * 60 + time.tm_sec
             setattr(parser.values, option.dest, seconds)
         except ValueError:
-            raise OptionValueError('invalid time format for option {}'.format(option.dest))
+            raise OptionValueError('Invalid time format for option {}'.format(option.dest))
 
     def parseCommandLine(self):
         (options, args) = self.parseArgs()
         if len(args) != 1:
-            self.printUsage()
-            exit(1)
+            error(self.getUsage())
+        if options.end_time <= options.start_time:
+            error("End time can't be earlier than start time\n")
         try:
             return (options.start_time, options.end_time, int(args[0]))
         except ValueError:
-            self.printUsage()
-            exit(1)
-            return
+            error(self.getUsage())
 
 
 progressBar = None
