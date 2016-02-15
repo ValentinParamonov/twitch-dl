@@ -59,7 +59,8 @@ class CommandLineParser():
         parser.add_option('-s', '--start_time', metavar='START', action='callback', callback=self.toSeconds, type='string')
         parser.add_option('-e', '--end_time', metavar='END', action='callback', callback=self.toSeconds, type='string')
         parser.usage = '%prog vod_id'
-        self.parser = parser
+        self.printUsage = lambda: parser.print_usage()
+        self.parseArgs = lambda: parser.parse_args()
 
     def toSeconds(self, option, optString, timeString, parser):
         try:
@@ -70,10 +71,16 @@ class CommandLineParser():
             raise OptionValueError('invalid time format for option {}'.format(option.dest))
 
     def parseCommandLine(self):
-        return self.parser.parse_args()
-
-    def printUsage(self):
-        self.parser.print_usage()
+        (options, args) = self.parseArgs()
+        if len(args) != 1:
+            self.printUsage()
+            exit(1)
+        try:
+            return (options.start_time, options.end_time, int(args[0]))
+        except ValueError:
+            self.printUsage()
+            exit(1)
+            return
 
 
 progressBar = None
@@ -81,27 +88,13 @@ progressBar = None
 
 def main():
     global progressBar
-    (startTime, endTime, vodId) = parseCommandLine()
+    (startTime, endTime, vodId) = CommandLineParser().parseCommandLine()
     fileName = createFile(vodName(vodId) + '.ts')
     sourceQualityLink = sourceQualityLinkIn(playlistsFor(vodId))
     (chunks, totalBytes, totalDuration) = withFileOffsets(chunksWithOffsets(contentsOf(sourceQualityLink)))
     baseUrl = sourceQualityLink.rsplit('/', 1)[0]
     progressBar = ProgressBar(fileName, totalBytes)
     downLoadFileFromChunks(fileName, chunks, baseUrl)
-
-
-def parseCommandLine():
-    parser = CommandLineParser()
-    (options, args) = parser.parseCommandLine()
-    argCount = len(args)
-    if argCount != 1:
-        parser.printUsage()
-        exit(1)
-    try:
-        return (options.start_time, options.end_time, int(args[0]))
-    except ValueError:
-        parser.printUsage()
-        exit(1)
 
 
 def playlistsFor(vodId):
