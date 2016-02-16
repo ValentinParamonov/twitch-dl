@@ -83,33 +83,43 @@ class CommandLineParser():
             error(self.getUsage())
 
 
+class Vod:
+    def __init__(self, vodId):
+        self.vodId = vodId
+
+    def links(self):
+        token = self.accessTokenFor(self.vodId)
+        recodedToken = {'nauth': token['token'], 'nauthsig': token['sig']}
+        res = requests.get('http://usher.justin.tv/vod/{}'.format(self.vodId), params=recodedToken)
+        return checkOk(res).content.decode('utf-8')
+
+    def accessTokenFor(self, vodId):
+        return self.jsonOf('https://api.twitch.tv/api/vods/{}/access_token'.format(vodId))
+
+    def name(self):
+        return self.jsonOf('https://api.twitch.tv/kraken/videos/v{}'.format(self.vodId))['title']
+
+    def jsonOf(self, resource):
+        return checkOk(getFrom(resource)).json()
+
+    def sourceQualityLink(self):
+        links = self.links().split('\n')
+        return next(filter(lambda line: '/high/' in line, links)).replace('/high/', '/chunked/')
+
+
 progressBar = None
 
 
 def main():
     global progressBar
     (startTime, endTime, vodId) = CommandLineParser().parseCommandLine()
-    fileName = createFile(vodName(vodId) + '.ts')
-    sourceQualityLink = sourceQualityLinkIn(playlistsFor(vodId))
+    vod = Vod(vodId)
+    sourceQualityLink = vod.sourceQualityLink()
     (chunks, totalBytes, totalDuration) = withFileOffsets(chunksWithOffsets(contentsOf(sourceQualityLink)))
     baseUrl = sourceQualityLink.rsplit('/', 1)[0]
+    fileName = createFile(vod.name() + '.ts')
     progressBar = ProgressBar(fileName, totalBytes)
     downLoadFileFromChunks(fileName, chunks, baseUrl)
-
-
-def playlistsFor(vodId):
-    token = accessTokenFor(vodId)
-    recodedToken = {'nauth': token['token'], 'nauthsig': token['sig']}
-    res = requests.get('http://usher.justin.tv/vod/{}'.format(vodId), params=recodedToken)
-    return checkOk(res).content.decode('utf-8')
-
-
-def accessTokenFor(vodId):
-    return jsonOf('https://api.twitch.tv/api/vods/{}/access_token'.format(vodId))
-
-
-def sourceQualityLinkIn(playlist):
-    return next(filter(lambda line: '/high/' in line, playlist.split('\n'))).replace('/high/', '/chunked/')
 
 
 def checkOk(response):
@@ -164,14 +174,6 @@ def toChunk(segment):
     chunkName = parsedLink.path
     endOffset = parse_qs(parsedLink.query)['end_offset'][0]
     return (chunkName, int(endOffset), segment.duration)
-
-
-def vodName(vodId):
-    return jsonOf('https://api.twitch.tv/kraken/videos/v{}'.format(vodId))['title']
-
-
-def jsonOf(resource):
-    return checkOk(getFrom(resource)).json()
 
 
 def withFileOffsets(chunksWithOffsets):
