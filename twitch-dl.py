@@ -59,7 +59,7 @@ class CommandLineParser():
         parser = OptionParser()
         parser.add_option('-s', '--start_time', metavar='START', action='callback', callback=self.toSeconds, type='string')
         parser.add_option('-e', '--end_time', metavar='END', action='callback', callback=self.toSeconds, type='string')
-        parser.usage = '%prog vod_id'
+        parser.usage = '%prog [options] vod_id'
         self.getUsage = lambda: parser.get_usage()
         self.parseArgs = lambda: parser.parse_args()
 
