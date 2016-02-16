@@ -13,6 +13,7 @@ from urllib.parse import urlparse, parse_qs
 
 import m3u8
 import requests
+import sys
 from requests import codes as status
 
 
@@ -52,13 +53,13 @@ class ProgressBar:
         return int(width)
 
 
-class CommandLineParser():
+class CommandLineParser:
     timePattern = '^(((?P<h>0{1,2}|[1-9]\d*):)?((?P<m>[0-5]?[0-9]):))?(?P<s>[0-5]?[0-9])$'
 
     def __init__(self):
         parser = OptionParser()
-        parser.add_option('-s', '--start_time', metavar='START', action='callback', callback=self.toSeconds, type='string')
-        parser.add_option('-e', '--end_time', metavar='END', action='callback', callback=self.toSeconds, type='string')
+        parser.add_option('-s', '--start_time', metavar='START', action='callback', callback=self.toSeconds, type='string', default='0')
+        parser.add_option('-e', '--end_time', metavar='END', action='callback', callback=self.toSeconds, type='string', default=str(sys.maxsize))
         parser.usage = '%prog [options] vod_id'
         self.getUsage = lambda: parser.get_usage()
         self.parseArgs = lambda: parser.parse_args()
