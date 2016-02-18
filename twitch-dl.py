@@ -2,6 +2,7 @@
 
 import os
 import re
+import sys
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from functools import reduce
@@ -13,7 +14,6 @@ from urllib.parse import urlparse, parse_qs
 
 import m3u8
 import requests
-import sys
 from requests import codes as status
 
 
@@ -108,6 +108,45 @@ class Vod:
         return next(filter(lambda line: '/high/' in line, links)).replace('/high/', '/chunked/')
 
 
+class Chunks:
+    def __init__(self, startTime, endTime):
+        self.startTime = startTime
+        self.endTime = endTime
+
+    def get(self, link):
+        return self.withFileOffsets(self.chunksWithOffsets(contentsOf(link)))
+
+    def withFileOffsets(self, chunksWithOffsets):
+        fileOffset = 0
+        totalDuration = 0
+        chunks = []
+        for chunkName, (size, duration) in chunksWithOffsets.items():
+            chunks.append(Chunk(chunkName, size, fileOffset, duration, totalDuration))
+            fileOffset += size + 1
+            totalDuration += duration
+        return (chunks, fileOffset, totalDuration)
+
+    def chunksWithOffsets(self, vodLinks):
+        playlist = m3u8.loads(vodLinks)
+        chunksWithEndOffsets = map(self.toChunk, playlist.segments)
+        return self.toUberChunks(groupby(chunksWithEndOffsets, lambda c: c[0]))
+
+    def toChunk(self, segment):
+        parsedLink = urlparse(segment.uri)
+        chunkName = parsedLink.path
+        endOffset = parse_qs(parsedLink.query)['end_offset'][0]
+        return (chunkName, int(endOffset), segment.duration)
+
+    def toUberChunks(self, groupedByName):
+        uberChunks = OrderedDict()
+        for chunkName, chunkGroup in groupedByName:
+            chunks = list(chunkGroup)
+            uberChunkSize = chunks[-1][1]
+            uberChunkDuration = reduce(lambda total, chunk: total + chunk[2], chunks, 0)
+            uberChunks[chunkName] = (uberChunkSize, uberChunkDuration)
+        return uberChunks
+
+
 progressBar = None
 
 
@@ -116,7 +155,7 @@ def main():
     (startTime, endTime, vodId) = CommandLineParser().parseCommandLine()
     vod = Vod(vodId)
     sourceQualityLink = vod.sourceQualityLink()
-    (chunks, totalBytes, totalDuration) = withFileOffsets(chunksWithOffsets(contentsOf(sourceQualityLink)))
+    (chunks, totalBytes, totalDuration) = Chunks(startTime, endTime).get(sourceQualityLink)
     baseUrl = sourceQualityLink.rsplit('/', 1)[0]
     fileName = createFile(vod.name() + '.ts')
     progressBar = ProgressBar(fileName, totalBytes)
@@ -152,40 +191,6 @@ def getFrom(resource):
         return requests.get(resource)
     except Exception as e:
         error(str(e))
-
-
-def chunksWithOffsets(vodLinks):
-    playlist = m3u8.loads(vodLinks)
-    chunksWithEndOffsets = map(toChunk, playlist.segments)
-    return toUberChunks(groupby(chunksWithEndOffsets, lambda c: c[0]))
-
-
-def toUberChunks(groupedByName):
-    uberChunks = OrderedDict()
-    for chunkName, chunkGroup in groupedByName:
-        chunks = list(chunkGroup)
-        uberChunkSize = chunks[-1][1]
-        uberChunkDuration = reduce(lambda total, chunk: total + chunk[2], chunks, 0)
-        uberChunks[chunkName] = (uberChunkSize, uberChunkDuration)
-    return uberChunks
-
-
-def toChunk(segment):
-    parsedLink = urlparse(segment.uri)
-    chunkName = parsedLink.path
-    endOffset = parse_qs(parsedLink.query)['end_offset'][0]
-    return (chunkName, int(endOffset), segment.duration)
-
-
-def withFileOffsets(chunksWithOffsets):
-    fileOffset = 0
-    totalDuration = 0
-    chunks = []
-    for chunkName, (size, duration) in chunksWithOffsets.items():
-        chunks.append(Chunk(chunkName, size, fileOffset, duration, totalDuration))
-        fileOffset += size + 1
-        totalDuration += duration
-    return (chunks, fileOffset, totalDuration)
 
 
 def downLoadFileFromChunks(fileName, chunks, baseUrl):
