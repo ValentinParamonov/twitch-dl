@@ -26,6 +26,14 @@ class Chunk:
         self.start = start
 
 
+class Playlist:
+    def __init__(self, chunks, totalBytes, totalDuration, baseUrl):
+        self.chunks = chunks
+        self.totalBytes = totalBytes
+        self.totalDuration = totalDuration
+        self.baseUrl = baseUrl
+
+
 class ProgressBar:
     def __init__(self, fileName, fileSize):
         self.fileName = fileName
@@ -91,8 +99,7 @@ class Vod:
     def links(self):
         token = self.accessTokenFor(self.vodId)
         recodedToken = {'nauth': token['token'], 'nauthsig': token['sig']}
-        res = requests.get('http://usher.justin.tv/vod/{}'.format(self.vodId), params=recodedToken)
-        return checkOk(res).content.decode('utf-8')
+        return Contents.utf8('http://usher.justin.tv/vod/{}'.format(self.vodId), params=recodedToken)
 
     def accessTokenFor(self, vodId):
         return self.jsonOf('https://api.twitch.tv/api/vods/{}/access_token'.format(vodId))
@@ -101,7 +108,7 @@ class Vod:
         return self.jsonOf('https://api.twitch.tv/kraken/videos/v{}'.format(self.vodId))['title']
 
     def jsonOf(self, resource):
-        return checkOk(getFrom(resource)).json()
+        return Contents.raw(resource).json()
 
     def sourceQualityLink(self):
         links = self.links().split('\n')
@@ -109,12 +116,11 @@ class Vod:
 
 
 class Chunks:
-    def __init__(self, startTime, endTime):
-        self.startTime = startTime
-        self.endTime = endTime
+    def __init__(self, link):
+        self.link = link
 
-    def get(self, link):
-        return self.withFileOffsets(self.chunksWithOffsets(contentsOf(link)))
+    def get(self, startTime, endTime):
+        return self.withFileOffsets(self.chunksWithOffsets(Contents.utf8(self.link)))
 
     def withFileOffsets(self, chunksWithOffsets):
         fileOffset = 0
@@ -124,7 +130,7 @@ class Chunks:
             chunks.append(Chunk(chunkName, size, fileOffset, duration, totalDuration))
             fileOffset += size + 1
             totalDuration += duration
-        return (chunks, fileOffset, totalDuration)
+        return Playlist(chunks, fileOffset, totalDuration, baseUrl=self.link.rsplit('/', 1)[0])
 
     def chunksWithOffsets(self, vodLinks):
         playlist = m3u8.loads(vodLinks)
@@ -147,25 +153,78 @@ class Chunks:
         return uberChunks
 
 
-progressBar = None
+class FileMaker:
+    def makeAvoidingOverwrite(self, desiredName):
+        actualName = self.findUntaken(desiredName)
+        open(actualName, 'w').close()
+        return actualName
+
+    def findUntaken(self, desiredName):
+        modifier = 0
+        newName = desiredName
+        while os.path.isfile(newName):
+            modifier += 1
+            newName = re.sub(r'.ts$', ' {:02}.ts'.format(modifier), desiredName)
+        return desiredName if modifier == 0 else newName
+
+
+class PlaylistDownloader:
+    def __init__(self, playlist):
+        self.playlist = playlist
+
+    def downloadTo(self, fileName):
+        playlist = self.playlist
+        progressBar = ProgressBar(fileName, playlist.totalBytes)
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            for chunk in playlist.chunks:
+                whenDone = lambda chunk: self.onChunkProcessed(chunk, progressBar)
+                executor.submit(self.downloadChunkAndWriteToFile, chunk, fileName, playlist.baseUrl).add_done_callback(whenDone)
+
+    def downloadChunkAndWriteToFile(self, chunk, fileName, baseUrl):
+        chunkContents = Contents.raw('{base}/{chunk}?start_offset=0&end_offset={end}'.format(base=baseUrl, chunk=chunk.name, end=chunk.size)).content
+        return self.writeContents(chunkContents, fileName, chunk.offset)
+
+    def writeContents(self, chunkContents, fileName, offset):
+        with open(fileName, 'rb+') as file:
+            file.seek(offset)
+            bytesWritten = file.write(chunkContents)
+            return bytesWritten
+
+    def onChunkProcessed(self, chunk, progressBar):
+        if chunk.exception():
+            error(str(chunk.exception()))
+        progressBar.updateBy(chunk.result())
+
+
+class Contents:
+    @staticmethod
+    def utf8(resource, params=None):
+        return Contents.raw(resource, params).content.decode('utf-8')
+
+    @staticmethod
+    def raw(resource, params=None):
+        return Contents.checkOk(Contents.get(resource, params))
+
+    @staticmethod
+    def checkOk(response):
+        if response.status_code != status.ok:
+            error('Failed to get {url}: got {statusCode} response'.format(url=response.url, statusCode=response.status_code))
+        return response
+
+    @staticmethod
+    def get(resource, params=None):
+        try:
+            return requests.get(resource, params=params)
+        except Exception as e:
+            error(str(e))
 
 
 def main():
-    global progressBar
     (startTime, endTime, vodId) = CommandLineParser().parseCommandLine()
     vod = Vod(vodId)
-    sourceQualityLink = vod.sourceQualityLink()
-    (chunks, totalBytes, totalDuration) = Chunks(startTime, endTime).get(sourceQualityLink)
-    baseUrl = sourceQualityLink.rsplit('/', 1)[0]
-    fileName = createFile(vod.name() + '.ts')
-    progressBar = ProgressBar(fileName, totalBytes)
-    downLoadFileFromChunks(fileName, chunks, baseUrl)
-
-
-def checkOk(response):
-    if response.status_code != status.ok:
-        error('Failed to get {url}: got {statusCode} response'.format(url=response.url, statusCode=response.status_code))
-    return response
+    playlist = Chunks(vod.sourceQualityLink()).get(startTime, endTime)
+    fileName = FileMaker().makeAvoidingOverwrite(vod.name() + '.ts')
+    PlaylistDownloader(playlist).downloadTo(fileName)
 
 
 def error(msg):
@@ -176,60 +235,6 @@ def error(msg):
 def info(msg):
     stdout.write(msg)
     stdout.flush()
-
-
-def contentsOf(resource):
-    return rawContentsOf(resource).decode('utf-8')
-
-
-def rawContentsOf(resource):
-    return checkOk(getFrom(resource)).content
-
-
-def getFrom(resource):
-    try:
-        return requests.get(resource)
-    except Exception as e:
-        error(str(e))
-
-
-def downLoadFileFromChunks(fileName, chunks, baseUrl):
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        for chunk in chunks:
-            executor.submit(downloadChunkAndWriteToFile, chunk, fileName, baseUrl).add_done_callback(onChunkProcessed)
-
-
-def createFile(initialName):
-    actualName = findSuitable(initialName)
-    open(actualName, 'w').close()
-    return actualName
-
-
-def findSuitable(fileName):
-    modifier = 0
-    newName = fileName
-    while os.path.isfile(newName):
-        modifier += 1
-        newName = re.sub(r'.ts$', ' {:02}.ts'.format(modifier), fileName)
-    return fileName if modifier == 0 else newName
-
-
-def downloadChunkAndWriteToFile(chunk, fileName, baseUrl):
-    chunkContents = rawContentsOf('{base}/{chunk}?start_offset=0&end_offset={end}'.format(base=baseUrl, chunk=chunk.name, end=chunk.size))
-    return writeContents(chunkContents, fileName, chunk.offset)
-
-
-def writeContents(chunkContents, fileName, offset):
-    with open(fileName, 'rb+') as file:
-        file.seek(offset)
-        bytesWritten = file.write(chunkContents)
-        return bytesWritten
-
-
-def onChunkProcessed(chunk):
-    if chunk.exception():
-        error(str(chunk.exception()))
-    progressBar.updateBy(chunk.result())
 
 
 if __name__ == '__main__':
