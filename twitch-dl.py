@@ -45,6 +45,54 @@ class Playlist:
         self.totalDuration = totalDuration
         self.baseUrl = baseUrl
 
+    @staticmethod
+    def get(link, startTime, endTime):
+        playlist = Contents.utf8(link)
+        (chunks, totalBytes, totalDuration) = Chunks.get(playlist, startTime, endTime)
+        baseUrl = link.rsplit('/', 1)[0]
+        return Playlist(chunks, totalBytes, totalDuration, baseUrl)
+
+
+class Chunks:
+    @classmethod
+    def get(cls, playlist, startTime, endTime):
+        # min endTIme totalDuration
+        return cls.withFileOffsets(cls.chunksWithOffsets(playlist))
+
+    @staticmethod
+    def withFileOffsets(chunksWithOffsets):
+        fileOffset = 0
+        totalDuration = 0
+        chunks = []
+        for chunkName, (size, duration) in chunksWithOffsets.items():
+            chunks.append(Chunk(chunkName, size, fileOffset, duration, totalDuration))
+            fileOffset += size + 1
+            totalDuration += duration
+        return (chunks, fileOffset, totalDuration)
+
+    @classmethod
+    def chunksWithOffsets(cls, vodLinks):
+        playlist = m3u8.loads(vodLinks)
+        chunksWithEndOffsets = map(cls.toChunk, playlist.segments)
+        return cls.toUberChunks(groupby(chunksWithEndOffsets, lambda c: c[0]))
+
+    @staticmethod
+    def toChunk(segment):
+        parsedLink = urlparse(segment.uri)
+        chunkName = parsedLink.path
+        endOffset = parse_qs(parsedLink.query)['end_offset'][0]
+        return (chunkName, int(endOffset), segment.duration)
+
+    @staticmethod
+    def toUberChunks(groupedByName):
+        uberChunks = OrderedDict()
+        for chunkName, chunkGroup in groupedByName:
+            chunks = list(chunkGroup)
+            uberChunkSize = chunks[-1][1]
+            uberChunkDuration = reduce(lambda total, chunk: total + chunk[2], chunks, 0)
+            uberChunks[chunkName] = (uberChunkSize, uberChunkDuration)
+        return uberChunks
+
 
 class ProgressBar:
     def __init__(self, fileName, fileSize):
@@ -127,45 +175,6 @@ class Vod:
         return next(filter(lambda line: '/high/' in line, links)).replace('/high/', '/chunked/')
 
 
-class Chunks:
-    def __init__(self, link):
-        self.playlist = Contents.utf8(link)
-        self.baseUrl = link.rsplit('/', 1)[0]
-
-    def get(self, startTime, endTime):
-        return self.withFileOffsets(self.chunksWithOffsets(self.playlist))
-
-    def withFileOffsets(self, chunksWithOffsets):
-        fileOffset = 0
-        totalDuration = 0
-        chunks = []
-        for chunkName, (size, duration) in chunksWithOffsets.items():
-            chunks.append(Chunk(chunkName, size, fileOffset, duration, totalDuration))
-            fileOffset += size + 1
-            totalDuration += duration
-        return Playlist(chunks, fileOffset, totalDuration, baseUrl=self.baseUrl)
-
-    def chunksWithOffsets(self, vodLinks):
-        playlist = m3u8.loads(vodLinks)
-        chunksWithEndOffsets = map(self.toChunk, playlist.segments)
-        return self.toUberChunks(groupby(chunksWithEndOffsets, lambda c: c[0]))
-
-    def toChunk(self, segment):
-        parsedLink = urlparse(segment.uri)
-        chunkName = parsedLink.path
-        endOffset = parse_qs(parsedLink.query)['end_offset'][0]
-        return (chunkName, int(endOffset), segment.duration)
-
-    def toUberChunks(self, groupedByName):
-        uberChunks = OrderedDict()
-        for chunkName, chunkGroup in groupedByName:
-            chunks = list(chunkGroup)
-            uberChunkSize = chunks[-1][1]
-            uberChunkDuration = reduce(lambda total, chunk: total + chunk[2], chunks, 0)
-            uberChunks[chunkName] = (uberChunkSize, uberChunkDuration)
-        return uberChunks
-
-
 class FileMaker:
     @classmethod
     def makeAvoidingOverwrite(cls, desiredName):
@@ -237,7 +246,7 @@ class Contents:
 def main():
     (startTime, endTime, vodId) = CommandLineParser().parseCommandLine()
     vod = Vod(vodId)
-    playlist = Chunks(vod.sourceQualityLink()).get(startTime, endTime)
+    playlist = Playlist.get(vod.sourceQualityLink(), startTime, endTime)
     fileName = FileMaker.makeAvoidingOverwrite(vod.name() + '.ts')
     PlaylistDownloader(playlist).downloadTo(fileName)
 
