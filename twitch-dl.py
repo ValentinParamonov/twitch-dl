@@ -5,7 +5,6 @@ import re
 import sys
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
-from functools import reduce
 from itertools import groupby
 from optparse import OptionParser, OptionValueError
 from sys import stderr, stdout, exit
@@ -30,67 +29,79 @@ class Log:
 
 
 class Chunk:
-    def __init__(self, name, size, offset, duration, start):
+    def __init__(self, name, startOffset, endOffset, fileOffset):
         self.name = name
-        self.size = size
-        self.offset = offset
-        self.duration = duration
-        self.start = start
+        self.startOffset = startOffset
+        self.endOffset = endOffset
+        self.fileOffset = fileOffset
 
 
 class Playlist:
-    def __init__(self, chunks, totalBytes, totalDuration, baseUrl):
+    def __init__(self, chunks, totalBytes, baseUrl):
         self.chunks = chunks
         self.totalBytes = totalBytes
-        self.totalDuration = totalDuration
         self.baseUrl = baseUrl
 
     @staticmethod
     def get(link, startTime, endTime):
         playlist = Contents.utf8(link)
-        (chunks, totalBytes, totalDuration) = Chunks.get(playlist, startTime, endTime)
+        (chunks, totalBytes) = Chunks.get(playlist, startTime, endTime)
         baseUrl = link.rsplit('/', 1)[0]
-        return Playlist(chunks, totalBytes, totalDuration, baseUrl)
+        return Playlist(chunks, totalBytes, baseUrl)
 
 
 class Chunks:
     @classmethod
-    def get(cls, playlist, startTime, endTime):
-        # min endTIme totalDuration
-        return cls.withFileOffsets(cls.chunksWithOffsets(playlist))
+    def get(cls, rawPlaylist, startTime, endTime):
+        segments = m3u8.loads(rawPlaylist).segments
+        clipped = cls.clipped(cls.withTime(segments), startTime, endTime)
+        return cls.withFileOffsets(cls.chunksWithOffsets(clipped))
+
+    @classmethod
+    def clipped(cls, segments, startTime, endTime):
+        return [s for (start, s) in segments if (start + s.duration) > startTime and start < endTime]
+
+    @classmethod
+    def withTime(cls, segments):
+        start = 0
+        withTime = []
+        for segment in segments:
+            withTime.append((start, segment))
+            start += segment.duration
+        return withTime
 
     @staticmethod
     def withFileOffsets(chunksWithOffsets):
         fileOffset = 0
-        totalDuration = 0
         chunks = []
-        for chunkName, (size, duration) in chunksWithOffsets.items():
-            chunks.append(Chunk(chunkName, size, fileOffset, duration, totalDuration))
-            fileOffset += size + 1
-            totalDuration += duration
-        return (chunks, fileOffset, totalDuration)
+        for chunkName, (startOffset, endOffset) in chunksWithOffsets.items():
+            chunks.append(Chunk(chunkName, startOffset, endOffset, fileOffset))
+            fileOffset += (endOffset - startOffset) + 1
+        totalSize = fileOffset
+        return (chunks, totalSize)
 
     @classmethod
-    def chunksWithOffsets(cls, vodLinks):
-        playlist = m3u8.loads(vodLinks)
-        chunksWithEndOffsets = map(cls.toChunk, playlist.segments)
-        return cls.toUberChunks(groupby(chunksWithEndOffsets, lambda c: c[0]))
+    def chunksWithOffsets(cls, segments):
+        chunksWithOffsets = map(cls.toChunkWithOffsets, segments)
+        return cls.toUberChunks(groupby(chunksWithOffsets, lambda c: c[0]))
 
     @staticmethod
-    def toChunk(segment):
+    def toChunkWithOffsets(segment):
         parsedLink = urlparse(segment.uri)
         chunkName = parsedLink.path
-        endOffset = parse_qs(parsedLink.query)['end_offset'][0]
-        return (chunkName, int(endOffset), segment.duration)
+        queryParams = parse_qs(parsedLink.query)
+        startOffset = int(queryParams['start_offset'][0])
+        endOffset = int(queryParams['end_offset'][0])
+        return (chunkName, startOffset, endOffset)
 
     @staticmethod
     def toUberChunks(groupedByName):
         uberChunks = OrderedDict()
         for chunkName, chunkGroup in groupedByName:
             chunks = list(chunkGroup)
-            uberChunkSize = chunks[-1][1]
-            uberChunkDuration = reduce(lambda total, chunk: total + chunk[2], chunks, 0)
-            uberChunks[chunkName] = (uberChunkSize, uberChunkDuration)
+            uberChunkStartOffset = chunks[0][1]
+            uberChunkEndOffset = chunks[-1][2]
+            uberChunks[chunkName] = (uberChunkStartOffset, uberChunkEndOffset)
         return uberChunks
 
 
@@ -190,6 +201,8 @@ class FileMaker:
 
 
 class PlaylistDownloader:
+    chunkLink = '{base}/{chunk}?start_offset={start}&end_offset={end}'.format
+
     def __init__(self, playlist):
         self.playlist = playlist
 
@@ -202,8 +215,8 @@ class PlaylistDownloader:
                 executor.submit(self.downloadChunkAndWriteToFile, chunk, fileName, playlist.baseUrl).add_done_callback(whenDone)
 
     def downloadChunkAndWriteToFile(self, chunk, fileName, baseUrl):
-        chunkContents = Contents.raw('{base}/{chunk}?start_offset=0&end_offset={end}'.format(base=baseUrl, chunk=chunk.name, end=chunk.size)).content
-        return self.writeContents(chunkContents, fileName, chunk.offset)
+        chunkContents = Contents.raw(self.chunkLink(base=baseUrl, chunk=chunk.name, start=chunk.startOffset, end=chunk.endOffset))
+        return self.writeContents(chunkContents, fileName, chunk.fileOffset)
 
     def writeContents(self, chunkContents, fileName, offset):
         with open(fileName, 'rb+') as file:
