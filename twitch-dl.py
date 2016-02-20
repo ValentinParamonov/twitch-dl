@@ -126,8 +126,8 @@ class CommandLineParser:
 
     def __init__(self):
         parser = OptionParser()
-        parser.add_option('-s', '--start_time', metavar='START', action='callback', callback=self.toSeconds, type='string', default='0')
-        parser.add_option('-e', '--end_time', metavar='END', action='callback', callback=self.toSeconds, type='string', default=str(sys.maxsize))
+        parser.add_option('-s', '--start_time', metavar='START', action='callback', callback=self.toSeconds, type='string', default=0)
+        parser.add_option('-e', '--end_time', metavar='END', action='callback', callback=self.toSeconds, type='string', default=sys.maxsize)
         parser.usage = '%prog [options] vod_id'
         self.getUsage = lambda: parser.get_usage()
         self.parseArgs = lambda: parser.parse_args()
