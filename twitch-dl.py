@@ -8,13 +8,25 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import reduce
 from itertools import groupby
 from optparse import OptionParser, OptionValueError
-from sys import stdout, stderr
+from sys import stderr, stdout, exit
 from threading import Lock
 from urllib.parse import urlparse, parse_qs
 
 import m3u8
 import requests
 from requests import codes as status
+
+
+class Log:
+    @staticmethod
+    def error(msg):
+        stderr.write(msg)
+        exit(1)
+
+    @staticmethod
+    def info(msg):
+        stdout.write(msg)
+        stdout.flush()
 
 
 class Chunk:
@@ -50,8 +62,8 @@ class ProgressBar:
         self.lock.release()
 
     def printBar(self, percentCompleted):
-        info('\r' + ' ' * self.getConsoleWidth())
-        info('\r{file} [{percents:3.0f}%]{terminator}'.format(
+        Log.info('\r' + ' ' * self.getConsoleWidth())
+        Log.info('\r{file} [{percents:3.0f}%]{terminator}'.format(
             file=self.fileName,
             percents=percentCompleted,
             terminator='\n' if self.current == self.total else ''))
@@ -83,13 +95,13 @@ class CommandLineParser:
     def parseCommandLine(self):
         (options, args) = self.parseArgs()
         if len(args) != 1:
-            error(self.getUsage())
+            Log.error(self.getUsage())
         if options.end_time <= options.start_time:
-            error("End time can't be earlier than start time\n")
+            Log.error("End time can't be earlier than start time\n")
         try:
             return (options.start_time, options.end_time, int(args[0]))
         except ValueError:
-            error(self.getUsage())
+            Log.error(self.getUsage())
 
 
 class Vod:
@@ -117,10 +129,11 @@ class Vod:
 
 class Chunks:
     def __init__(self, link):
-        self.link = link
+        self.playlist = Contents.utf8(link)
+        self.baseUrl = link.rsplit('/', 1)[0]
 
     def get(self, startTime, endTime):
-        return self.withFileOffsets(self.chunksWithOffsets(Contents.utf8(self.link)))
+        return self.withFileOffsets(self.chunksWithOffsets(self.playlist))
 
     def withFileOffsets(self, chunksWithOffsets):
         fileOffset = 0
@@ -130,7 +143,7 @@ class Chunks:
             chunks.append(Chunk(chunkName, size, fileOffset, duration, totalDuration))
             fileOffset += size + 1
             totalDuration += duration
-        return Playlist(chunks, fileOffset, totalDuration, baseUrl=self.link.rsplit('/', 1)[0])
+        return Playlist(chunks, fileOffset, totalDuration, baseUrl=self.baseUrl)
 
     def chunksWithOffsets(self, vodLinks):
         playlist = m3u8.loads(vodLinks)
@@ -154,12 +167,14 @@ class Chunks:
 
 
 class FileMaker:
-    def makeAvoidingOverwrite(self, desiredName):
-        actualName = self.findUntaken(desiredName)
+    @classmethod
+    def makeAvoidingOverwrite(cls, desiredName):
+        actualName = cls.findUntaken(desiredName)
         open(actualName, 'w').close()
         return actualName
 
-    def findUntaken(self, desiredName):
+    @staticmethod
+    def findUntaken(desiredName):
         modifier = 0
         newName = desiredName
         while os.path.isfile(newName):
@@ -192,49 +207,39 @@ class PlaylistDownloader:
 
     def onChunkProcessed(self, chunk, progressBar):
         if chunk.exception():
-            error(str(chunk.exception()))
+            Log.error(str(chunk.exception()))
         progressBar.updateBy(chunk.result())
 
 
 class Contents:
-    @staticmethod
-    def utf8(resource, params=None):
-        return Contents.raw(resource, params).content.decode('utf-8')
+    @classmethod
+    def utf8(cls, resource, params=None):
+        return cls.raw(resource, params).content.decode('utf-8')
 
-    @staticmethod
-    def raw(resource, params=None):
-        return Contents.checkOk(Contents.get(resource, params))
-
-    @staticmethod
-    def checkOk(response):
-        if response.status_code != status.ok:
-            error('Failed to get {url}: got {statusCode} response'.format(url=response.url, statusCode=response.status_code))
-        return response
+    @classmethod
+    def raw(cls, resource, params=None):
+        return cls.checkOk(cls.get(resource, params))
 
     @staticmethod
     def get(resource, params=None):
         try:
             return requests.get(resource, params=params)
         except Exception as e:
-            error(str(e))
+            Log.error(str(e))
+
+    @staticmethod
+    def checkOk(response):
+        if response.status_code != status.ok:
+            Log.error('Failed to get {url}: got {statusCode} response'.format(url=response.url, statusCode=response.status_code))
+        return response
 
 
 def main():
     (startTime, endTime, vodId) = CommandLineParser().parseCommandLine()
     vod = Vod(vodId)
     playlist = Chunks(vod.sourceQualityLink()).get(startTime, endTime)
-    fileName = FileMaker().makeAvoidingOverwrite(vod.name() + '.ts')
+    fileName = FileMaker.makeAvoidingOverwrite(vod.name() + '.ts')
     PlaylistDownloader(playlist).downloadTo(fileName)
-
-
-def error(msg):
-    stderr.write(msg)
-    exit(1)
-
-
-def info(msg):
-    stdout.write(msg)
-    stdout.flush()
 
 
 if __name__ == '__main__':
