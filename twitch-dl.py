@@ -162,13 +162,10 @@ class Vod:
         return Contents.utf8('http://usher.justin.tv/vod/{}'.format(self.vodId), params=recodedToken)
 
     def accessTokenFor(self, vodId):
-        return self.jsonOf('https://api.twitch.tv/api/vods/{}/access_token'.format(vodId))
+        return Contents.json('https://api.twitch.tv/api/vods/{}/access_token'.format(vodId))
 
     def name(self):
-        return self.jsonOf('https://api.twitch.tv/kraken/videos/v{}'.format(self.vodId))['title']
-
-    def jsonOf(self, resource):
-        return Contents.raw(resource).json()
+        return Contents.json('https://api.twitch.tv/kraken/videos/v{}'.format(self.vodId))['title']
 
     def sourceQualityLink(self):
         links = self.links().split('\n')
@@ -223,10 +220,18 @@ class PlaylistDownloader:
 class Contents:
     @classmethod
     def utf8(cls, resource, params=None):
-        return cls.raw(resource, params).content.decode('utf-8')
+        return cls.raw(resource, params).decode('utf-8')
 
     @classmethod
     def raw(cls, resource, params=None):
+        return cls.getOk(resource, params).content
+
+    @classmethod
+    def json(cls, resource, params=None):
+        return cls.getOk(resource, params).json()
+
+    @classmethod
+    def getOk(cls, resource, params=None):
         return cls.checkOk(cls.get(resource, params))
 
     @staticmethod
