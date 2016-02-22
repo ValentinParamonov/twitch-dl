@@ -265,6 +265,8 @@ def main():
     (startTime, endTime, vodId) = CommandLineParser().parseCommandLine()
     vod = Vod(vodId)
     playlist = Playlist.get(vod.sourceQualityLink(), startTime, endTime)
+    if playlist.totalBytes == 0:
+        Log.error('Nothing to download\n')
     fileName = FileMaker.makeAvoidingOverwrite(vod.name() + '.ts')
     PlaylistDownloader(playlist).downloadTo(fileName)
 
