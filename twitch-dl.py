@@ -247,7 +247,8 @@ class Contents:
     @staticmethod
     def get(resource, params=None):
         try:
-            return requests.get(resource, params=params)
+            twitch_web_player_client_id = {'Client-ID': 'jzkbprff40iqj646a697cyrvl0zt2m6'}
+            return requests.get(resource, params=params, headers=twitch_web_player_client_id)
         except Exception as e:
             Log.error(str(e))
 
