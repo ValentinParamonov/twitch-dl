@@ -4,7 +4,6 @@ import os
 import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
-from itertools import groupby
 from optparse import OptionParser, OptionValueError
 from sys import stderr, stdout, exit
 from threading import Lock
@@ -27,36 +26,37 @@ class Log:
 
 
 class Chunk:
-    def __init__(self, name, fileOffset):
-        self.name = name
+    def __init__(self, url, fileOffset):
+        self.url = url
         self.fileOffset = fileOffset
 
 
 class Playlist:
-    def __init__(self, chunks, totalBytes, fullUri):
+    def __init__(self, chunks, totalBytes):
         self.chunks = chunks
         self.totalBytes = totalBytes
-        self.fullUri = fullUri
 
-    @staticmethod
-    def get(link, startTime, endTime):
-        playlist = Contents.utf8(link)
+class PlaylistBuilder:
+    @classmethod
+    def __baseUrl(cls, link):
         baseUrl = link.rsplit('/', 1)[0]
-        fullUri = lambda chunkName: '{}/{}'.format(baseUrl, chunkName)
-        (chunks, totalBytes) = Chunks.get(playlist, startTime, endTime, fullUri)
-        return Playlist(chunks, totalBytes, fullUri)
+        return baseUrl[0:baseUrl.rfind('/')] + '/chunked'
+
+    @classmethod
+    def get(cls, link, startTime, endTime):
+        segments = m3u8.loads(Contents.utf8(link)).segments
+        baseUrl = cls.__baseUrl(link)
+        for segment in segments:
+            segment.base_path = baseUrl
+        (chunks, totalBytes) = Chunks.get(segments, startTime, endTime)
+        return Playlist(chunks, totalBytes)
 
 
 class Chunks:
     @classmethod
-    def get(cls, rawPlaylist, startTime, endTime, fullUri):
-        segments = m3u8.loads(rawPlaylist).segments
-        clipped = cls.clipped(cls.withTime(segments), startTime, endTime)
-        return cls.withFileOffsets(cls.chunksWithOffsets(clipped), fullUri)
-
-    @classmethod
-    def clipped(cls, segments, startTime, endTime):
-        return [s for (start, s) in segments if (start + s.duration) > startTime and start < endTime]
+    def get(cls, segments, startTime, endTime):
+        clippedSegments = cls.clipped(cls.withTime(segments), startTime, endTime)
+        return cls.toChunks(cls.withLength(clippedSegments))
 
     @classmethod
     def withTime(cls, segments):
@@ -68,33 +68,26 @@ class Chunks:
         return withTime
 
     @classmethod
-    def withFileOffsets(cls, chunksWithOffsets, fullUri):
-        fileOffset = 0
-        chunks = []
-        for groupName, group in chunksWithOffsets:
-            groupedChunks = list(group)
-            fileOffset -= list(groupedChunks)[0][1]
-            for (chunkName, startOffset) in groupedChunks:
-                chunks.append(Chunk(chunkName, fileOffset + startOffset))
-            (lastChunk, lastChunkOffset) = groupedChunks[-1]
-            fileOffset += lastChunkOffset + cls.queryChunkSize(fullUri(lastChunk))
-        totalSize = fileOffset
-        return (chunks, totalSize)
+    def clipped(cls, segments, startTime, endTime):
+        return [s for (start, s) in segments if (start + s.duration) > startTime and start < endTime]
 
     @classmethod
-    def chunksWithOffsets(cls, segments):
-        chunksWithOffsets = list(map(cls.toChunkWithOffsets, segments))
-        return groupby(chunksWithOffsets, lambda c: c[0].split('-')[2])
+    def withLength(cls, segments):
+        return map(lambda s: (s, cls.queryChunkSize(s.uri)), segments)
 
-    @staticmethod
-    def toChunkWithOffsets(segment):
-        chunkName = segment.uri
-        startOffset = int(chunkName.split('.')[0].split('-')[-1])
-        return (chunkName, startOffset)
-
-    @staticmethod
-    def queryChunkSize(chunkUri):
+    @classmethod
+    def queryChunkSize(cls, chunkUri):
         return int(Contents.headers(chunkUri)['content-length'])
+
+    @classmethod
+    def toChunks(cls, segmentsWithLength):
+        fileOffset = 0
+        chunks = []
+        for segment, length in segmentsWithLength:
+            chunks.append(Chunk(segment.uri, fileOffset))
+            fileOffset += length
+        totalSize = fileOffset
+        return (chunks, totalSize)
 
 
 class ProgressBar:
@@ -170,9 +163,9 @@ class Vod:
     def name(self):
         return Contents.json('https://api.twitch.tv/kraken/videos/v{}'.format(self.vodId))['title']
 
-    def sourceQualityLink(self):
+    def highestQualityLink(self):
         links = self.links().split('\n')
-        return next(filter(lambda line: '/high/' in line, links)).replace('/high/', '/chunked/')
+        return next(filter(lambda line: 'http' in line, links))
 
 
 class FileMaker:
@@ -205,7 +198,7 @@ class PlaylistDownloader:
                 executor.submit(self.downloadChunkAndWriteToFile, chunk, fileName).add_done_callback(whenDone)
 
     def downloadChunkAndWriteToFile(self, chunk, fileName):
-        chunkContents = Contents.raw(self.playlist.fullUri(chunk.name))
+        chunkContents = Contents.raw(chunk.url)
         return self.writeContents(chunkContents, fileName, chunk.fileOffset)
 
     def writeContents(self, chunkContents, fileName, offset):
@@ -262,7 +255,7 @@ class Contents:
 def main():
     (startTime, endTime, vodId) = CommandLineParser().parseCommandLine()
     vod = Vod(vodId)
-    playlist = Playlist.get(vod.sourceQualityLink(), startTime, endTime)
+    playlist = PlaylistBuilder.get(vod.highestQualityLink(), startTime, endTime)
     if playlist.totalBytes == 0:
         Log.error('Nothing to download\n')
     fileName = FileMaker.makeAvoidingOverwrite(vod.name() + '.ts')
