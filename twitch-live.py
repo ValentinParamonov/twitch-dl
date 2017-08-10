@@ -69,7 +69,9 @@ def fetch_segments():
 def write(segments):
     with open('out.ts', 'ab') as file:
         for segment in segments:
-            file.write(requests.get(segment.uri).content)
+            for chunk in requests.get(segment.uri).iter_content(chunk_size=2048):
+                if chunk:
+                    file.write(chunk)
 
 
 def duration(segments):
