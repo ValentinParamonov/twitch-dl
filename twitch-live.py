@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 from collections import deque
 import requests
 import m3u8
@@ -26,14 +27,14 @@ def record():
         segments = fetch_segments()
         new_segments = list(filter(lambda s: s.title not in downloaded, segments))
         write(new_segments)
+        if segments_lost(downloaded, new_segments):
+            sys.stderr.write('Lost segments detected!\n')
         for segment in new_segments:
-            print(segment.title)
             downloaded.append(segment.title)
         sleep_seconds = adjust_sleep(
             sleep_seconds,
             len(segments) - len(new_segments)
         )
-        print(sleep_seconds)
         time_to_sleep = sleep_seconds - 2 * stopwatch.split()
         if time_to_sleep > 0:
             sleep(time_to_sleep)
@@ -66,6 +67,11 @@ def fetch_segments():
     return segments
 
 
+def segments_lost(downloaded, new_segments):
+    return False if len(downloaded) == 0 else \
+        segment_index(new_segments[0].title) != segment_index(downloaded[-1]) + 1
+
+
 def write(segments):
     with open('out.ts', 'ab') as file:
         for segment in segments:
@@ -74,19 +80,21 @@ def write(segments):
                     file.write(chunk)
 
 
-def duration(segments):
-    return sum(map(lambda s: s.duration, segments), 0)
-
-
 def adjust_sleep(current_sleep, old_segment_count):
     if old_segment_count == 0:
-        return current_sleep * 0.4
+        return current_sleep - 0.5
     elif old_segment_count == 1:
-        return current_sleep * 0.8
+        return current_sleep - 0.05
     elif old_segment_count == 2:
-        return current_sleep * 1.1
+        return current_sleep + 0.1
+    elif old_segment_count == 3:
+        return current_sleep + 0.3
     else:
-        return current_sleep * 1.2
+        return current_sleep + 0.5
+
+
+def segment_index(segment_title):
+    return int(segment_title.split('-')[1])
 
 
 if __name__ == '__main__':
