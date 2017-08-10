@@ -36,6 +36,7 @@ class Playlist:
         self.chunks = chunks
         self.totalBytes = totalBytes
 
+
 class PlaylistBuilder:
     @classmethod
     def __baseUrl(cls, link):
@@ -58,8 +59,8 @@ class Chunks:
         clippedSegments = cls.clipped(cls.withTime(segments), startTime, endTime)
         return cls.toChunks(cls.withLength(clippedSegments))
 
-    @classmethod
-    def withTime(cls, segments):
+    @staticmethod
+    def withTime(segments):
         start = 0
         withTime = []
         for segment in segments:
@@ -67,20 +68,20 @@ class Chunks:
             start += segment.duration
         return withTime
 
-    @classmethod
-    def clipped(cls, segments, startTime, endTime):
+    @staticmethod
+    def clipped(segments, startTime, endTime):
         return [s for (start, s) in segments if (start + s.duration) > startTime and start < endTime]
 
     @classmethod
     def withLength(cls, segments):
         return map(lambda s: (s, cls.queryChunkSize(s.uri)), segments)
 
-    @classmethod
-    def queryChunkSize(cls, chunkUri):
+    @staticmethod
+    def queryChunkSize(chunkUri):
         return int(Contents.headers(chunkUri)['content-length'])
 
-    @classmethod
-    def toChunks(cls, segmentsWithLength):
+    @staticmethod
+    def toChunks(segmentsWithLength):
         fileOffset = 0
         chunks = []
         for segment, length in segmentsWithLength:
