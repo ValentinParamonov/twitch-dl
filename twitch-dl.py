@@ -56,11 +56,11 @@ class PlaylistBuilder:
 class Chunks:
     @classmethod
     def get(cls, segments, startTime, endTime):
-        clippedSegments = cls.clipped(cls.withTime(segments), startTime, endTime)
-        return cls.toChunks(cls.withLength(clippedSegments))
+        clippedSegments = cls.__clipped(cls.__withTime(segments), startTime, endTime)
+        return cls.__toChunks(cls.__withLength(clippedSegments))
 
     @staticmethod
-    def withTime(segments):
+    def __withTime(segments):
         start = 0
         withTime = []
         for segment in segments:
@@ -69,19 +69,19 @@ class Chunks:
         return withTime
 
     @staticmethod
-    def clipped(segments, startTime, endTime):
+    def __clipped(segments, startTime, endTime):
         return [s for (start, s) in segments if (start + s.duration) > startTime and start < endTime]
 
     @classmethod
-    def withLength(cls, segments):
-        return map(lambda s: (s, cls.queryChunkSize(s.uri)), segments)
+    def __withLength(cls, segments):
+        return map(lambda s: (s, cls.__queryChunkSize(s.uri)), segments)
 
     @staticmethod
-    def queryChunkSize(chunkUri):
-        return int(Contents.headers(chunkUri)['content-length'])
+    def __queryChunkSize(chunkUri):
+        return int(Contents.__headers(chunkUri)['content-length'])
 
     @staticmethod
-    def toChunks(segmentsWithLength):
+    def __toChunks(segmentsWithLength):
         fileOffset = 0
         chunks = []
         for segment, length in segmentsWithLength:
@@ -103,17 +103,17 @@ class ProgressBar:
         self.lock.acquire()
         self.current += bytes
         percentCompleted = self.current / self.total * 100
-        self.printBar(percentCompleted)
+        self.__printBar(percentCompleted)
         self.lock.release()
 
-    def printBar(self, percentCompleted):
-        Log.info('\r' + ' ' * self.getConsoleWidth())
+    def __printBar(self, percentCompleted):
+        Log.info('\r' + ' ' * self.__getConsoleWidth())
         Log.info('\r{file} [{percents:3.0f}%]{terminator}'.format(
             file=self.fileName,
             percents=percentCompleted,
             terminator='\n' if self.current == self.total else ''))
 
-    def getConsoleWidth(self):
+    def __getConsoleWidth(self):
         _, width = os.popen('stty size', 'r').read().split()
         return int(width)
 
@@ -123,13 +123,13 @@ class CommandLineParser:
 
     def __init__(self):
         parser = OptionParser()
-        parser.add_option('-s', '--start_time', metavar='START', action='callback', callback=self.toSeconds, type='string', default=0)
-        parser.add_option('-e', '--end_time', metavar='END', action='callback', callback=self.toSeconds, type='string', default=sys.maxsize)
+        parser.add_option('-s', '--start_time', metavar='START', action='callback', callback=self.__toSeconds, type='string', default=0)
+        parser.add_option('-e', '--end_time', metavar='END', action='callback', callback=self.__toSeconds, type='string', default=sys.maxsize)
         parser.usage = '%prog [options] vod_id'
         self.getUsage = lambda: parser.get_usage()
         self.parseArgs = lambda: parser.parse_args()
 
-    def toSeconds(self, option, optString, timeString, parser):
+    def __toSeconds(self, option, optString, timeString, parser):
         match = re.search(self.timePattern, timeString)
         if not match:
             raise OptionValueError('Invalid time format for option {}'.format(option.dest))
@@ -153,31 +153,31 @@ class Vod:
     def __init__(self, vodId):
         self.vodId = vodId
 
-    def links(self):
-        token = self.accessTokenFor(self.vodId)
+    def highestQualityLink(self):
+        links = self.__links().split('\n')
+        return next(filter(lambda line: 'http' in line, links))
+
+    def __links(self):
+        token = self.__accessTokenFor(self.vodId)
         recodedToken = {'nauth': token['token'], 'nauthsig': token['sig']}
         return Contents.utf8('http://usher.justin.tv/vod/{}'.format(self.vodId), params=recodedToken)
 
-    def accessTokenFor(self, vodId):
+    def __accessTokenFor(self, vodId):
         return Contents.json('https://api.twitch.tv/api/vods/{}/access_token'.format(vodId))
 
     def name(self):
         return Contents.json('https://api.twitch.tv/kraken/videos/v{}'.format(self.vodId))['title']
 
-    def highestQualityLink(self):
-        links = self.links().split('\n')
-        return next(filter(lambda line: 'http' in line, links))
-
 
 class FileMaker:
     @classmethod
     def makeAvoidingOverwrite(cls, desiredName):
-        actualName = cls.findUntaken(desiredName)
+        actualName = cls.__findUntaken(desiredName)
         open(actualName, 'w').close()
         return actualName
 
     @staticmethod
-    def findUntaken(desiredName):
+    def __findUntaken(desiredName):
         modifier = 0
         newName = desiredName
         while os.path.isfile(newName):
@@ -195,20 +195,20 @@ class PlaylistDownloader:
         progressBar = ProgressBar(fileName, playlist.totalBytes)
         with ThreadPoolExecutor(max_workers=10) as executor:
             for chunk in playlist.chunks:
-                whenDone = lambda chunk: self.onChunkProcessed(chunk, progressBar)
-                executor.submit(self.downloadChunkAndWriteToFile, chunk, fileName).add_done_callback(whenDone)
+                whenDone = lambda chunk: self.__onChunkProcessed(chunk, progressBar)
+                executor.submit(self.__downloadChunkAndWriteToFile, chunk, fileName).add_done_callback(whenDone)
 
-    def downloadChunkAndWriteToFile(self, chunk, fileName):
+    def __downloadChunkAndWriteToFile(self, chunk, fileName):
         chunkContents = Contents.raw(chunk.url)
-        return self.writeContents(chunkContents, fileName, chunk.fileOffset)
+        return self.__writeContents(chunkContents, fileName, chunk.fileOffset)
 
-    def writeContents(self, chunkContents, fileName, offset):
+    def __writeContents(self, chunkContents, fileName, offset):
         with open(fileName, 'rb+') as file:
             file.seek(offset)
             bytesWritten = file.write(chunkContents)
             return bytesWritten
 
-    def onChunkProcessed(self, chunk, progressBar):
+    def __onChunkProcessed(self, chunk, progressBar):
         if chunk.exception():
             Log.error(str(chunk.exception()))
         progressBar.updateBy(chunk.result())
@@ -221,25 +221,25 @@ class Contents:
 
     @classmethod
     def raw(cls, resource, params=None):
-        return cls.getOk(resource, params).content
+        return cls.__getOk(resource, params).content
 
     @classmethod
     def json(cls, resource, params=None):
-        return cls.getOk(resource, params).json()
+        return cls.__getOk(resource, params).json()
 
     @classmethod
-    def getOk(cls, resource, params=None):
-        return cls.checkOk(cls.get(resource, params))
+    def __getOk(cls, resource, params=None):
+        return cls.__checkOk(cls.__get(resource, params))
 
     @classmethod
-    def headers(cls, resource):
+    def __headers(cls, resource):
         try:
-            return cls.checkOk(requests.head(resource)).headers
+            return cls.__checkOk(requests.head(resource)).headers
         except Exception as e:
             Log.error(str(e))
 
     @staticmethod
-    def get(resource, params=None):
+    def __get(resource, params=None):
         try:
             twitch_web_player_client_id = {'Client-ID': 'jzkbprff40iqj646a697cyrvl0zt2m6'}
             return requests.get(resource, params=params, headers=twitch_web_player_client_id)
@@ -247,7 +247,7 @@ class Contents:
             Log.error(str(e))
 
     @staticmethod
-    def checkOk(response):
+    def __checkOk(response):
         if response.status_code != status.ok:
             Log.error('Failed to get {url}: got {statusCode} response'.format(url=response.url, statusCode=response.status_code))
         return response
