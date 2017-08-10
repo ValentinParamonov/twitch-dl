@@ -22,35 +22,47 @@ class Stopwatch:
 class Recorder:
     def __init__(self):
         self.recording = True
+        self.client_id = {'Client-ID': 'jzkbprff40iqj646a697cyrvl0zt2m6'}
+        self.downloaded = deque(maxlen=8)
+        self.stopwatch = Stopwatch()
+        self.sleep_seconds = 10
 
     def record(self, channel):
-        downloaded = deque(maxlen=8)
-        sleep_seconds = 10
-        stopwatch = Stopwatch()
+        stream_name = self.lookup_stream(channel)
+        if stream_name is None:
+            print('Seems like {} is offline'.format(channel))
+            return
+        file_name = stream_name + '.ts'
+        print('recording ' + stream_name)
         while self.recording:
-            stopwatch.split()
+            self.stopwatch.split()
             segments = self.__fetch_segments(channel)
-            new_segments = list(
-                filter(lambda s: s.title not in downloaded, segments))
-            self.__write(new_segments)
-            if self.__segments_lost(downloaded, new_segments):
+            new_segments = self.only_new(segments)
+            self.__write(file_name, new_segments)
+            if self.__segments_lost(new_segments):
                 sys.stderr.write('Lost segments detected!\n')
-            for segment in new_segments:
-                print(segment.title)
-                downloaded.append(segment.title)
-            sleep_seconds = self.__adjust_sleep(
-                sleep_seconds,
-                len(segments) - len(new_segments)
-            )
-            time_to_sleep = sleep_seconds - 2 * stopwatch.split()
+            self.store_downloaded(new_segments)
+            self.__adjust_sleep(len(segments) - len(new_segments))
+            time_to_sleep = self.sleep_seconds - 2 * self.stopwatch.split()
             if time_to_sleep > 0:
                 sleep(time_to_sleep)
 
-    @staticmethod
-    def __fetch_segments(channel):
+    def lookup_stream(self, channel):
+        response = requests.get(
+            'https://api.twitch.tv/kraken/streams/{}'.format(channel),
+            headers=self.client_id
+        )
+        if response.status_code != 200:
+            return None
+        json = response.json()
+        if json['stream'] is None:
+            return None
+        return json['stream']['channel']['status']
+
+    def __fetch_segments(self, channel):
         token = requests.get(
             'https://api.twitch.tv/api/channels/{}/access_token'.format(channel),
-            headers={'Client-ID': 'jzkbprff40iqj646a697cyrvl0zt2m6'}
+            headers=self.client_id
         ).json()
 
         playlist = requests.get(
@@ -73,36 +85,42 @@ class Recorder:
 
         return segments
 
-    def __segments_lost(self, downloaded, new_segments):
-        return False if len(downloaded) == 0 else \
+    def only_new(self, segments):
+        return list(filter(lambda s: s.title not in self.downloaded, segments))
+
+    def __segments_lost(self, new_segments):
+        return False if len(self.downloaded) == 0 else \
             self.__segment_index(new_segments[0].title) \
-            != self.__segment_index(downloaded[-1]) + 1
+            != self.__segment_index(self.downloaded[-1]) + 1
 
     @staticmethod
     def __segment_index(segment_title):
         return int(segment_title.split('-')[1])
 
+    def store_downloaded(self, new_segments):
+        for segment in new_segments:
+            self.downloaded.append(segment.title)
+
     @staticmethod
-    def __write(segments):
-        with open('out.ts', 'ab') as file:
+    def __write(file_name, segments):
+        with open(file_name, 'ab') as file:
             for segment in segments:
                 chunks = requests.get(segment.uri)
                 for chunk in chunks.iter_content(chunk_size=2048):
                     if chunk:
                         file.write(chunk)
 
-    @staticmethod
-    def __adjust_sleep(current_sleep, old_segment_count):
+    def __adjust_sleep(self, old_segment_count):
         if old_segment_count == 0:
-            return current_sleep - 0.5
+            self.sleep_seconds -= 0.5
         elif old_segment_count == 1:
-            return current_sleep - 0.05
+            self.sleep_seconds -= 0.05
         elif old_segment_count == 2:
-            return current_sleep + 0.1
+            self.sleep_seconds += 0.1
         elif old_segment_count == 3:
-            return current_sleep + 0.3
+            self.sleep_seconds += 0.3
         else:
-            return current_sleep + 0.5
+            self.sleep_seconds += 0.5
 
     def stop(self):
         self.recording = False
