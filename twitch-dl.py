@@ -228,14 +228,17 @@ class PlaylistDownloader:
         return lambda chunk: self.__on_chunk_processed(chunk, progress_bar)
 
     def __download_chunk_and_write_to_file(self, chunk: Chunk, file_name):
-        chunk_contents = Contents.raw(chunk.url)
+        chunk_contents = Contents.chunked(chunk.url)
         return self.__write_contents(chunk_contents, file_name, chunk.file_offset)
 
     @staticmethod
     def __write_contents(chunk_contents, file_name, offset):
         with open(file_name, 'rb+') as file:
             file.seek(offset)
-            bytes_written = file.write(chunk_contents)
+            bytes_written = 0
+            for chunk in chunk_contents.iter_content(chunk_size=2048):
+                if chunk:
+                    bytes_written += file.write(chunk)
             return bytes_written
 
     @staticmethod
@@ -252,14 +255,14 @@ class Contents:
 
     @classmethod
     def raw(cls, resource, params=None):
-        return cls.__getOk(resource, params).content
+        return cls.__get_ok(resource, params).content
 
     @classmethod
     def json(cls, resource, params=None):
-        return cls.__getOk(resource, params).json()
+        return cls.__get_ok(resource, params).json()
 
     @classmethod
-    def __getOk(cls, resource, params=None):
+    def __get_ok(cls, resource, params=None):
         return cls.__check_ok(cls.__get(resource, params))
 
     @classmethod
@@ -272,12 +275,14 @@ class Contents:
     @staticmethod
     def __get(resource, params=None):
         try:
-            twitch_web_player_client_id = \
-                {'Client-ID': 'jzkbprff40iqj646a697cyrvl0zt2m6'}
+            twitch_web_player_client_id = {
+                'Client-ID': 'jzkbprff40iqj646a697cyrvl0zt2m6'
+            }
             return requests.get(
                 resource,
                 params=params,
-                headers=twitch_web_player_client_id
+                headers=twitch_web_player_client_id,
+                stream=True
             )
         except Exception as e:
             Log.error(str(e))
@@ -292,6 +297,10 @@ class Contents:
                 )
             )
         return response
+
+    @classmethod
+    def chunked(cls, resource):
+        return cls.__get_ok(resource)
 
 
 def main():
