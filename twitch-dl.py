@@ -26,192 +26,223 @@ class Log:
 
 
 class Chunk:
-    def __init__(self, url, fileOffset):
+    def __init__(self, url, file_offset):
         self.url = url
-        self.fileOffset = fileOffset
+        self.file_offset = file_offset
 
 
 class Playlist:
-    def __init__(self, chunks, totalBytes):
+    def __init__(self, chunks, total_bytes):
         self.chunks = chunks
-        self.totalBytes = totalBytes
+        self.total_bytes = total_bytes
 
 
 class PlaylistBuilder:
     @classmethod
-    def __baseUrl(cls, link):
-        baseUrl = link.rsplit('/', 1)[0]
-        return baseUrl[0:baseUrl.rfind('/')] + '/chunked'
+    def __base_url(cls, link):
+        base_url = link.rsplit('/', 1)[0]
+        return base_url[0:base_url.rfind('/')] + '/chunked'
 
     @classmethod
-    def get(cls, link, startTime, endTime):
+    def get(cls, link, start_time, end_time):
         segments = m3u8.loads(Contents.utf8(link)).segments
-        baseUrl = cls.__baseUrl(link)
+        base_url = cls.__base_url(link)
         for segment in segments:
-            segment.base_path = baseUrl
-        (chunks, totalBytes) = Chunks.get(segments, startTime, endTime)
-        return Playlist(chunks, totalBytes)
+            segment.base_path = base_url
+        (chunks, total_bytes) = Chunks.get(segments, start_time, end_time)
+        return Playlist(chunks, total_bytes)
 
 
 class Chunks:
     @classmethod
-    def get(cls, segments, startTime, endTime):
-        clippedSegments = cls.__clipped(cls.__withTime(segments), startTime, endTime)
-        return cls.__toChunks(cls.__withLength(clippedSegments))
+    def get(cls, segments, start_time, end_time):
+        clipped_segments = cls.__clipped(
+            cls.__with_time(segments),
+            start_time,
+            end_time
+        )
+        return cls.__to_chunks(cls.__with_length(clipped_segments))
 
     @staticmethod
-    def __withTime(segments):
+    def __with_time(segments):
         start = 0
-        withTime = []
+        with_time = []
         for segment in segments:
-            withTime.append((start, segment))
+            with_time.append((start, segment))
             start += segment.duration
-        return withTime
+        return with_time
 
     @staticmethod
-    def __clipped(segments, startTime, endTime):
-        return [s for (start, s) in segments if (start + s.duration) > startTime and start < endTime]
+    def __clipped(segments, start_time, end_time):
+        return [
+            s for (start, s)
+            in segments
+            if (start + s.duration) > start_time and start < end_time
+        ]
 
     @classmethod
-    def __withLength(cls, segments):
-        return map(lambda s: (s, cls.__queryChunkSize(s.uri)), segments)
+    def __with_length(cls, segments):
+        return map(lambda s: (s, cls.__query_chunk_size(s.uri)), segments)
 
     @staticmethod
-    def __queryChunkSize(chunkUri):
-        return int(Contents.__headers(chunkUri)['content-length'])
+    def __query_chunk_size(chunk_uri):
+        return int(Contents.headers(chunk_uri)['content-length'])
 
     @staticmethod
-    def __toChunks(segmentsWithLength):
-        fileOffset = 0
+    def __to_chunks(segments_with_length):
+        file_offset = 0
         chunks = []
-        for segment, length in segmentsWithLength:
-            chunks.append(Chunk(segment.uri, fileOffset))
-            fileOffset += length
-        totalSize = fileOffset
-        return (chunks, totalSize)
+        for segment, length in segments_with_length:
+            chunks.append(Chunk(segment.uri, file_offset))
+            file_offset += length
+        total_size = file_offset
+        return chunks, total_size
 
 
 class ProgressBar:
-    def __init__(self, fileName, fileSize):
-        self.fileName = fileName
-        self.total = fileSize
+    def __init__(self, file_name, file_size):
+        self.fileName = file_name
+        self.total = file_size
         self.current = 0
         self.lock = Lock()
-        self.updateBy(0)
+        self.update_by(0)
 
-    def updateBy(self, bytes):
+    def update_by(self, byte_count):
         self.lock.acquire()
-        self.current += bytes
-        percentCompleted = self.current / self.total * 100
-        self.__printBar(percentCompleted)
+        self.current += byte_count
+        percent_completed = self.current / self.total * 100
+        self.__print_bar(percent_completed)
         self.lock.release()
 
-    def __printBar(self, percentCompleted):
-        Log.info('\r' + ' ' * self.__getConsoleWidth())
+    def __print_bar(self, percent_completed):
+        Log.info('\r' + ' ' * self.__get_console_width())
         Log.info('\r{file} [{percents:3.0f}%]{terminator}'.format(
             file=self.fileName,
-            percents=percentCompleted,
+            percents=percent_completed,
             terminator='\n' if self.current == self.total else ''))
 
-    def __getConsoleWidth(self):
+    @staticmethod
+    def __get_console_width():
         _, width = os.popen('stty size', 'r').read().split()
         return int(width)
 
 
 class CommandLineParser:
-    timePattern = '^(((?P<h>0{1,2}|[1-9]\d*):)?((?P<m>[0-5]?[0-9]):))?(?P<s>[0-5]?[0-9])$'
+    time_pattern = \
+        '^(((?P<h>0{1,2}|[1-9]\d*):)?((?P<m>[0-5]?[0-9]):))?(?P<s>[0-5]?[0-9])$'
 
     def __init__(self):
         parser = OptionParser()
-        parser.add_option('-s', '--start_time', metavar='START', action='callback', callback=self.__toSeconds, type='string', default=0)
-        parser.add_option('-e', '--end_time', metavar='END', action='callback', callback=self.__toSeconds, type='string', default=sys.maxsize)
+        parser.add_option('-s', '--start_time', metavar='START', action='callback',
+                          callback=self.__to_seconds, type='string', default=0)
+        parser.add_option('-e', '--end_time', metavar='END', action='callback',
+                          callback=self.__to_seconds, type='string',
+                          default=sys.maxsize)
         parser.usage = '%prog [options] vod_id'
-        self.getUsage = lambda: parser.get_usage()
-        self.parseArgs = lambda: parser.parse_args()
+        self.get_usage = lambda: parser.get_usage()
+        self.parse_args = lambda: parser.parse_args()
 
-    def __toSeconds(self, option, optString, timeString, parser):
-        match = re.search(self.timePattern, timeString)
+    def __to_seconds(self, option, opt_string, time_string, parser):
+        match = re.search(self.time_pattern, time_string)
         if not match:
-            raise OptionValueError('Invalid time format for option {}'.format(option.dest))
+            raise OptionValueError(
+                'Invalid time format for option {}'.format(option.dest)
+            )
         ts = dict(map(lambda g: (g, int(match.group(g) or '0')), ['h', 'm', 's']))
         seconds = ts['h'] * 3600 + ts['m'] * 60 + ts['s']
         setattr(parser.values, option.dest, seconds)
 
-    def parseCommandLine(self):
-        (options, args) = self.parseArgs()
+    def parse_command_line(self):
+        (options, args) = self.parse_args()
         if len(args) != 1:
-            Log.error(self.getUsage())
+            Log.error(self.get_usage())
         if options.end_time <= options.start_time:
             Log.error("End time can't be earlier than start time\n")
         try:
-            return (options.start_time, options.end_time, int(args[0]))
+            return options.start_time, options.end_time, int(args[0])
         except ValueError:
-            Log.error(self.getUsage())
+            Log.error(self.get_usage())
 
 
 class Vod:
     def __init__(self, vodId):
-        self.vodId = vodId
+        self.vod_id = vodId
 
-    def highestQualityLink(self):
+    def best_quality_link(self):
         links = self.__links().split('\n')
         return next(filter(lambda line: 'http' in line, links))
 
     def __links(self):
-        token = self.__accessTokenFor(self.vodId)
-        recodedToken = {'nauth': token['token'], 'nauthsig': token['sig']}
-        return Contents.utf8('http://usher.justin.tv/vod/{}'.format(self.vodId), params=recodedToken)
+        token = self.__access_token_for(self.vod_id)
+        recoded_token = {'nauth': token['token'], 'nauthsig': token['sig']}
+        return Contents.utf8(
+            'http://usher.justin.tv/vod/{}'.format(self.vod_id),
+            params=recoded_token
+        )
 
-    def __accessTokenFor(self, vodId):
-        return Contents.json('https://api.twitch.tv/api/vods/{}/access_token'.format(vodId))
+    @staticmethod
+    def __access_token_for(vod_id):
+        return Contents.json(
+            'https://api.twitch.tv/api/vods/{}/access_token'.format(vod_id)
+        )
 
     def name(self):
-        return Contents.json('https://api.twitch.tv/kraken/videos/v{}'.format(self.vodId))['title']
+        return Contents.json(
+            'https://api.twitch.tv/kraken/videos/v{}'.format(self.vod_id)
+        )['title']
 
 
 class FileMaker:
     @classmethod
-    def makeAvoidingOverwrite(cls, desiredName):
-        actualName = cls.__findUntaken(desiredName)
-        open(actualName, 'w').close()
-        return actualName
+    def make_avoiding_overwrite(cls, desired_name):
+        actual_name = cls.__find_vacant(desired_name)
+        open(actual_name, 'w').close()
+        return actual_name
 
     @staticmethod
-    def __findUntaken(desiredName):
+    def __find_vacant(desired_name):
         modifier = 0
-        newName = desiredName
-        while os.path.isfile(newName):
+        new_name = desired_name
+        while os.path.isfile(new_name):
             modifier += 1
-            newName = re.sub(r'.ts$', ' {:02}.ts'.format(modifier), desiredName)
-        return desiredName if modifier == 0 else newName
+            new_name = re.sub(r'.ts$', ' {:02}.ts'.format(modifier), desired_name)
+        return desired_name if modifier == 0 else new_name
 
 
 class PlaylistDownloader:
-    def __init__(self, playlist):
+    def __init__(self, playlist: Playlist):
         self.playlist = playlist
 
-    def downloadTo(self, fileName):
+    def download_to(self, file_name):
         playlist = self.playlist
-        progressBar = ProgressBar(fileName, playlist.totalBytes)
+        progress_bar = ProgressBar(file_name, playlist.total_bytes)
         with ThreadPoolExecutor(max_workers=10) as executor:
             for chunk in playlist.chunks:
-                whenDone = lambda chunk: self.__onChunkProcessed(chunk, progressBar)
-                executor.submit(self.__downloadChunkAndWriteToFile, chunk, fileName).add_done_callback(whenDone)
+                executor.submit(
+                    self.__download_chunk_and_write_to_file,
+                    chunk,
+                    file_name
+                ).add_done_callback(self.__when_done(progress_bar))
 
-    def __downloadChunkAndWriteToFile(self, chunk, fileName):
-        chunkContents = Contents.raw(chunk.url)
-        return self.__writeContents(chunkContents, fileName, chunk.fileOffset)
+    def __when_done(self, progress_bar):
+        return lambda chunk: self.__on_chunk_processed(chunk, progress_bar)
 
-    def __writeContents(self, chunkContents, fileName, offset):
-        with open(fileName, 'rb+') as file:
+    def __download_chunk_and_write_to_file(self, chunk: Chunk, file_name):
+        chunk_contents = Contents.raw(chunk.url)
+        return self.__write_contents(chunk_contents, file_name, chunk.file_offset)
+
+    @staticmethod
+    def __write_contents(chunk_contents, file_name, offset):
+        with open(file_name, 'rb+') as file:
             file.seek(offset)
-            bytesWritten = file.write(chunkContents)
-            return bytesWritten
+            bytes_written = file.write(chunk_contents)
+            return bytes_written
 
-    def __onChunkProcessed(self, chunk, progressBar):
+    @staticmethod
+    def __on_chunk_processed(chunk, progress_bar):
         if chunk.exception():
             Log.error(str(chunk.exception()))
-        progressBar.updateBy(chunk.result())
+        progress_bar.update_by(chunk.result())
 
 
 class Contents:
@@ -229,38 +260,48 @@ class Contents:
 
     @classmethod
     def __getOk(cls, resource, params=None):
-        return cls.__checkOk(cls.__get(resource, params))
+        return cls.__check_ok(cls.__get(resource, params))
 
     @classmethod
-    def __headers(cls, resource):
+    def headers(cls, resource):
         try:
-            return cls.__checkOk(requests.head(resource)).headers
+            return cls.__check_ok(requests.head(resource)).headers
         except Exception as e:
             Log.error(str(e))
 
     @staticmethod
     def __get(resource, params=None):
         try:
-            twitch_web_player_client_id = {'Client-ID': 'jzkbprff40iqj646a697cyrvl0zt2m6'}
-            return requests.get(resource, params=params, headers=twitch_web_player_client_id)
+            twitch_web_player_client_id = \
+                {'Client-ID': 'jzkbprff40iqj646a697cyrvl0zt2m6'}
+            return requests.get(
+                resource,
+                params=params,
+                headers=twitch_web_player_client_id
+            )
         except Exception as e:
             Log.error(str(e))
 
     @staticmethod
-    def __checkOk(response):
+    def __check_ok(response):
         if response.status_code != status.ok:
-            Log.error('Failed to get {url}: got {statusCode} response'.format(url=response.url, statusCode=response.status_code))
+            Log.error(
+                'Failed to get {url}: got {statusCode} response'.format(
+                    url=response.url,
+                    statusCode=response.status_code
+                )
+            )
         return response
 
 
 def main():
-    (startTime, endTime, vodId) = CommandLineParser().parseCommandLine()
-    vod = Vod(vodId)
-    playlist = PlaylistBuilder.get(vod.highestQualityLink(), startTime, endTime)
-    if playlist.totalBytes == 0:
+    (start_time, end_time, vod_id) = CommandLineParser().parse_command_line()
+    vod = Vod(vod_id)
+    playlist = PlaylistBuilder.get(vod.best_quality_link(), start_time, end_time)
+    if playlist.total_bytes == 0:
         Log.error('Nothing to download\n')
-    fileName = FileMaker.makeAvoidingOverwrite(vod.name() + '.ts')
-    PlaylistDownloader(playlist).downloadTo(fileName)
+    file_name = FileMaker.make_avoiding_overwrite(vod.name() + '.ts')
+    PlaylistDownloader(playlist).download_to(file_name)
 
 
 if __name__ == '__main__':
