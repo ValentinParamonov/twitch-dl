@@ -28,7 +28,7 @@ class Recorder:
         self.sleep_seconds = 10
 
     def record(self, channel):
-        stream_name = self.lookup_stream(channel)
+        stream_name = self.__lookup_stream(channel)
         if stream_name is None:
             print('Seems like {} is offline'.format(channel))
             return
@@ -37,17 +37,17 @@ class Recorder:
         while self.recording:
             self.stopwatch.split()
             segments = self.__fetch_segments(channel)
-            new_segments = self.only_new(segments)
+            new_segments = self.__only_new(segments)
             self.__write(file_name, new_segments)
             if self.__segments_lost(new_segments):
                 sys.stderr.write('Lost segments detected!\n')
-            self.store_downloaded(new_segments)
+            self.__store_downloaded(new_segments)
             self.__adjust_sleep(len(segments) - len(new_segments))
             time_to_sleep = self.sleep_seconds - 2 * self.stopwatch.split()
             if time_to_sleep > 0:
                 sleep(time_to_sleep)
 
-    def lookup_stream(self, channel):
+    def __lookup_stream(self, channel):
         response = requests.get(
             'https://api.twitch.tv/kraken/streams/{}'.format(channel),
             headers=self.client_id
@@ -85,7 +85,7 @@ class Recorder:
 
         return segments
 
-    def only_new(self, segments):
+    def __only_new(self, segments):
         return list(filter(lambda s: s.title not in self.downloaded, segments))
 
     def __segments_lost(self, new_segments):
@@ -97,7 +97,7 @@ class Recorder:
     def __segment_index(segment_title):
         return int(segment_title.split('-')[1])
 
-    def store_downloaded(self, new_segments):
+    def __store_downloaded(self, new_segments):
         for segment in new_segments:
             self.downloaded.append(segment.title)
 
@@ -130,8 +130,7 @@ if __name__ == '__main__':
     if (len(sys.argv)) != 2:
         sys.stderr.write('Needs channel to record!\n')
         sys.exit(1)
-    channel = sys.argv[1]
+    channel_name = sys.argv[1]
     recorder = Recorder()
     signal.signal(signal.SIGINT, lambda sig, frame: recorder.stop())
-    recorder.record(channel)
-    print('Done')
+    recorder.record(channel_name)
