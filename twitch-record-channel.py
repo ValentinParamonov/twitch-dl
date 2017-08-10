@@ -37,6 +37,9 @@ class Recorder:
         while self.recording:
             self.stopwatch.split()
             segments = self.__fetch_segments(channel)
+            if len(segments) == 0:
+                print('Broadcast ended.')
+                return
             new_segments = self.__only_new(segments)
             self.__write(file_name, new_segments)
             if self.__segments_lost(new_segments):
@@ -60,30 +63,44 @@ class Recorder:
         return json['stream']['channel']['status']
 
     def __fetch_segments(self, channel):
-        token = requests.get(
-            'https://api.twitch.tv/api/channels/{}/access_token'.format(channel),
-            headers=self.client_id
-        ).json()
-
-        playlist = requests.get(
-            'https://usher.ttvnw.net/api/channel/hls/{}.m3u8'.format(channel),
-            params={'token': token['token'], 'sig': token['sig']}
-        ).content.decode('utf-8')
-
-        best_quality_link = next(
-            filter(lambda line: 'http' in line, playlist.split('\n'))
-        )
-
+        best_quality_link = self.__best_quality_link(channel)
+        if best_quality_link is None:
+            return []
         playlist = requests.get(best_quality_link).content.decode('utf-8')
-
         base_url = best_quality_link[0:best_quality_link.rfind('/')]
         segments = m3u8.loads(playlist).segments
-
         for segment in segments:
             segment.title = segment.uri
             segment.base_path = base_url
-
         return segments
+
+    def __best_quality_link(self, channel):
+        token = self.__fetch_token(channel)
+        if token is None:
+            return None
+        playlist = self.__fetch_playlist(channel, token)
+        if playlist is None:
+            return None
+        return next(filter(lambda line: 'http' in line, playlist.split('\n')))
+
+    def __fetch_token(self, channel):
+        response = requests.get(
+            'https://api.twitch.tv/api/channels/{}/access_token'.format(channel),
+            headers=self.client_id
+        )
+        if response.status_code != 200:
+            return None
+        return response.json()
+
+    @staticmethod
+    def __fetch_playlist(channel, token):
+        response = requests.get(
+            'https://usher.ttvnw.net/api/channel/hls/{}.m3u8'.format(channel),
+            params={'token': token['token'], 'sig': token['sig']}
+        )
+        if response.status_code != 200:
+            return None
+        return response.content.decode('utf-8')
 
     def __only_new(self, segments):
         return list(filter(lambda s: s.title not in self.downloaded, segments))
