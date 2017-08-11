@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
-
+import re
 import sys
 from collections import deque
+
+import os
+
+import itertools
 import requests
 import m3u8
 from time import time, sleep
@@ -32,7 +36,7 @@ class Recorder:
         if stream_name is None:
             print('Seems like {} is offline'.format(channel))
             return
-        file_name = stream_name + '.ts'
+        file_name = self.__next_vacant(stream_name + '.ts')
         print('recording ' + stream_name)
         while self.recording:
             self.stopwatch.split()
@@ -61,6 +65,14 @@ class Recorder:
         if json['stream'] is None:
             return None
         return json['stream']['channel']['status']
+
+    @staticmethod
+    def __next_vacant(file_name: str):
+        new_name = file_name
+        for i in itertools.count(1):
+            if not os.path.isfile(new_name):
+                return new_name
+            new_name = re.sub(r'(\..+)$', r' {:02}\1'.format(i), file_name)
 
     def __fetch_segments(self, channel):
         best_quality_link = self.__best_quality_link(channel)
