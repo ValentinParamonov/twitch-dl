@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+
+import requests
+from sys import argv, stdout, stderr, exit
+
+
+def stream_status(channel):
+    response = requests.get(
+        'https://api.twitch.tv/kraken/streams/{}'.format(channel),
+        headers={'Client-Id': 'jzkbprff40iqj646a697cyrvl0zt2m6'}
+    )
+    if response.status_code != 200:
+        return None
+    json = response.json()
+    if json['stream'] is None:
+        return None
+    return json['stream']['channel']['status']
+
+
+if __name__ == '__main__':
+    if len(argv) != 2:
+        stderr.write('You must provide a channel name!\n')
+        exit(1)
+
+    status = stream_status(argv[1])
+    if status is None:
+        stderr.write('Seems like the channel is offline.\n')
+        exit(1)
+    stdout.write(status + '\n')
