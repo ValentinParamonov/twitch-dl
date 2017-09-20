@@ -4,7 +4,7 @@ import requests
 from sys import argv, stdout, stderr, exit
 
 
-def stream_status(channel):
+def fetch_stream(channel):
     response = requests.get(
         'https://api.twitch.tv/kraken/streams/{}'.format(channel),
         headers={'Client-Id': 'jzkbprff40iqj646a697cyrvl0zt2m6'}
@@ -14,7 +14,19 @@ def stream_status(channel):
     json = response.json()
     if json['stream'] is None:
         return None
-    return json['stream']['channel']['status']
+    return json['stream']
+
+
+def write_status(channel_name):
+    stream = fetch_stream(channel_name)
+    if stream is None:
+        stderr.write('Seems like the channel is offline.\n')
+        exit(1)
+    if stream['channel'] is None:
+        return
+    stream_status = stream['channel']['status']
+    if stream_status:
+        stdout.write(stream_status + '\n')
 
 
 if __name__ == '__main__':
@@ -22,8 +34,5 @@ if __name__ == '__main__':
         stderr.write('You must provide a channel name!\n')
         exit(1)
 
-    status = stream_status(argv[1])
-    if status is None:
-        stderr.write('Seems like the channel is offline.\n')
-        exit(1)
-    stdout.write(status + '\n')
+    _channel_name = argv[1]
+    write_status(_channel_name)
