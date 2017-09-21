@@ -20,16 +20,10 @@ class Playlist:
 
     @classmethod
     def __best_quality_playlist(cls, playlists):
-        playlists.sort(key=cls.__by_resolution_and_bandwidth)
-        best_playlist_uri = playlists[-1].uri
+        best_playlist_uri = playlists[0].uri
         playlist = cls.fetch_playlist(best_playlist_uri)
         playlist.base_path = best_playlist_uri.rsplit('/', 1)[0]
         return playlist
-
-    @staticmethod
-    def __by_resolution_and_bandwidth(playlist):
-        stream_info = playlist.stream_info
-        return stream_info.resolution, stream_info.bandwidth
 
     @staticmethod
     def fetch_playlist(link, token=None):
