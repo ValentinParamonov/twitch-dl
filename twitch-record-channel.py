@@ -74,25 +74,35 @@ class Recorder:
             new_name = re.sub(r'(\..+)$', r' {:02}\1'.format(i), file_name)
 
     def __fetch_segments(self, channel):
-        best_quality_link = self.__best_quality_link(channel)
-        if best_quality_link is None:
+        playlist = self.__playlist_for(channel)
+        if playlist is None:
             return []
-        playlist = requests.get(best_quality_link).content.decode('utf-8')
-        base_url = best_quality_link[0:best_quality_link.rfind('/')]
-        segments = m3u8.loads(playlist).segments
+        segments = playlist.segments
         for segment in segments:
-            segment.title = segment.uri
-            segment.base_path = base_url
+            segment.title = segment.uri.rsplit('/', 1)[1]
         return segments
 
-    def __best_quality_link(self, channel):
+    def __playlist_for(self, channel):
         token = self.__fetch_token(channel)
         if token is None:
             return None
-        playlist = self.__fetch_playlist(channel, token)
+        playlist = self.__fetch_playlist(self.__playlist_link_for(channel), token)
         if playlist is None:
             return None
-        return next(filter(lambda line: 'http' in line, playlist.split('\n')))
+        return self.__best_quality_playlist(playlist.playlists)
+
+    @classmethod
+    def __best_quality_playlist(cls, playlists):
+        playlists.sort(key=cls.__by_resolution_and_bandwidth)
+        best_playlist_uri = playlists[-1].uri
+        playlist = cls.__fetch_playlist(best_playlist_uri)
+        playlist.base_path = best_playlist_uri.rsplit('/', 1)[0]
+        return playlist
+
+    @staticmethod
+    def __by_resolution_and_bandwidth(playlist):
+        stream_info = playlist.stream_info
+        return stream_info.resolution, stream_info.bandwidth
 
     def __fetch_token(self, channel):
         response = requests.get(
@@ -104,14 +114,18 @@ class Recorder:
         return response.json()
 
     @staticmethod
-    def __fetch_playlist(channel, token):
+    def __playlist_link_for(channel):
+        return 'https://usher.ttvnw.net/api/channel/hls/{}.m3u8'.format(channel)
+
+    @staticmethod
+    def __fetch_playlist(link, token=None):
         response = requests.get(
-            'https://usher.ttvnw.net/api/channel/hls/{}.m3u8'.format(channel),
-            params={'token': token['token'], 'sig': token['sig']}
+            link,
+            params={'token': token['token'], 'sig': token['sig']} if token else {}
         )
         if response.status_code != 200:
             return None
-        return response.content.decode('utf-8')
+        return m3u8.loads(response.content.decode('utf8'))
 
     def __only_new(self, segments):
         return list(filter(lambda s: s.title not in self.downloaded, segments))
