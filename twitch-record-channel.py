@@ -11,6 +11,7 @@ import requests
 import m3u8
 from time import time, sleep
 import signal
+import uuid
 
 
 class Stopwatch:
@@ -31,14 +32,10 @@ class Recorder:
         self.downloaded = deque(maxlen=8)
         self.stopwatch = Stopwatch()
         self.sleep_seconds = 10
+        self.file_name = uuid.uuid4().hex + '.ts'
+        self.stream_name = None
 
     def record(self, channel):
-        stream_name = self.__lookup_stream(channel)
-        if stream_name is None:
-            print('Seems like {} is offline'.format(channel))
-            return
-        file_name = self.__next_vacant(stream_name + '.ts')
-        print('recording ' + stream_name)
         while self.recording:
             self.stopwatch.split()
             segments = self.__fetch_segments(channel)
@@ -46,11 +43,12 @@ class Recorder:
                 print('Broadcast ended.')
                 return
             new_segments = self.__only_new(segments)
-            self.__write(file_name, new_segments)
+            self.__write(new_segments)
             if self.__segments_lost(new_segments):
                 sys.stderr.write('Lost segments detected!\n')
             self.__store_downloaded(new_segments)
             self.__adjust_sleep(len(segments) - len(new_segments))
+            self.__rename_recording_if_stream_name_became_known_for(channel)
             time_to_sleep = self.sleep_seconds - 2 * self.stopwatch.split()
             if time_to_sleep > 0:
                 sleep(time_to_sleep)
@@ -131,9 +129,8 @@ class Recorder:
         for segment in new_segments:
             self.downloaded.append(segment.title)
 
-    @staticmethod
-    def __write(file_name, segments):
-        with open(file_name, 'ab') as file:
+    def __write(self, segments):
+        with open(self.file_name, 'ab') as file:
             for segment in segments:
                 chunks = requests.get(segment.uri)
                 for chunk in chunks.iter_content(chunk_size=2048):
@@ -151,6 +148,17 @@ class Recorder:
             self.sleep_seconds += 0.3
         else:
             self.sleep_seconds += 0.5
+
+    def __rename_recording_if_stream_name_became_known_for(self, channel):
+        if self.stream_name:
+            return
+        self.stream_name = self.__lookup_stream(channel)
+        if self.stream_name is None:
+            return
+        print('Recording ' + self.stream_name)
+        old_file_name = self.file_name
+        self.file_name = self.__next_vacant(self.stream_name + '.ts')
+        os.rename(old_file_name, self.file_name)
 
     def stop(self):
         self.recording = False
