@@ -27,7 +27,7 @@ class Playlist:
 
     @staticmethod
     def fetch_playlist(link, token=None):
-        params = {'allow_source': 'true'}
+        params = {'allow_source': 'true'} if token else {}
         params.update(
             {'token': token['token'], 'sig': token['sig']} if token else {}
         )
