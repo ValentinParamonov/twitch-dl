@@ -5,24 +5,12 @@ import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from optparse import OptionParser, OptionValueError
-from sys import stderr, stdout, exit
 from threading import Lock
 
-import m3u8
-import requests
-from requests import codes as status
-
-
-class Log:
-    @staticmethod
-    def error(msg):
-        stderr.write(msg)
-        exit(1)
-
-    @staticmethod
-    def info(msg):
-        stdout.write(msg)
-        stdout.flush()
+from twitch.playlist import Playlist as PlaylistFetcher
+from twitch.vod import Vod
+from util.contents import Contents
+from util.log import Log
 
 
 class Chunk:
@@ -37,22 +25,6 @@ class Playlist:
         self.total_bytes = total_bytes
 
 
-class PlaylistBuilder:
-    @classmethod
-    def __base_url(cls, link):
-        base_url = link.rsplit('/', 1)[0]
-        return base_url[0:base_url.rfind('/')] + '/chunked'
-
-    @classmethod
-    def get(cls, link, start_time, end_time):
-        segments = m3u8.loads(Contents.utf8(link)).segments
-        base_url = cls.__base_url(link)
-        for segment in segments:
-            segment.base_path = base_url
-        (chunks, total_bytes) = Chunks.get(segments, start_time, end_time)
-        return Playlist(chunks, total_bytes)
-
-
 class Chunks:
     @classmethod
     def get(cls, segments, start_time, end_time):
@@ -61,7 +33,8 @@ class Chunks:
             start_time,
             end_time
         )
-        return cls.__to_chunks(cls.__with_length(clipped_segments))
+        chunks, total_bytes = cls.__to_chunks(cls.__with_length(clipped_segments))
+        return Playlist(chunks, total_bytes)
 
     @staticmethod
     def __with_time(segments):
@@ -164,34 +137,6 @@ class CommandLineParser:
             Log.error(self.get_usage())
 
 
-class Vod:
-    def __init__(self, vodId):
-        self.vod_id = vodId
-
-    def best_quality_link(self):
-        links = self.__links().split('\n')
-        return next(filter(lambda line: 'http' in line, links))
-
-    def __links(self):
-        token = self.__access_token_for(self.vod_id)
-        recoded_token = {'nauth': token['token'], 'nauthsig': token['sig']}
-        return Contents.utf8(
-            'http://usher.justin.tv/vod/{}'.format(self.vod_id),
-            params=recoded_token
-        )
-
-    @staticmethod
-    def __access_token_for(vod_id):
-        return Contents.json(
-            'https://api.twitch.tv/api/vods/{}/access_token'.format(vod_id)
-        )
-
-    def name(self):
-        return Contents.json(
-            'https://api.twitch.tv/kraken/videos/v{}'.format(self.vod_id)
-        )['title']
-
-
 class FileMaker:
     @classmethod
     def make_avoiding_overwrite(cls, desired_name):
@@ -248,68 +193,13 @@ class PlaylistDownloader:
         progress_bar.update_by(chunk.result())
 
 
-class Contents:
-    @classmethod
-    def utf8(cls, resource, params=None):
-        return cls.raw(resource, params).decode('utf-8')
-
-    @classmethod
-    def raw(cls, resource, params=None):
-        return cls.__get_ok(resource, params).content
-
-    @classmethod
-    def json(cls, resource, params=None):
-        return cls.__get_ok(resource, params).json()
-
-    @classmethod
-    def __get_ok(cls, resource, params=None):
-        return cls.__check_ok(cls.__get(resource, params))
-
-    @classmethod
-    def headers(cls, resource):
-        try:
-            return cls.__check_ok(requests.head(resource)).headers
-        except Exception as e:
-            Log.error(str(e))
-
-    @staticmethod
-    def __get(resource, params=None):
-        try:
-            twitch_web_player_client_id = {
-                'Client-ID': 'jzkbprff40iqj646a697cyrvl0zt2m6'
-            }
-            return requests.get(
-                resource,
-                params=params,
-                headers=twitch_web_player_client_id,
-                stream=True
-            )
-        except Exception as e:
-            Log.error(str(e))
-
-    @staticmethod
-    def __check_ok(response):
-        if response.status_code != status.ok:
-            Log.error(
-                'Failed to get {url}: got {statusCode} response'.format(
-                    url=response.url,
-                    statusCode=response.status_code
-                )
-            )
-        return response
-
-    @classmethod
-    def chunked(cls, resource):
-        return cls.__get_ok(resource)
-
-
 def main():
     (start_time, end_time, vod_id) = CommandLineParser().parse_command_line()
-    vod = Vod(vod_id)
-    playlist = PlaylistBuilder.get(vod.best_quality_link(), start_time, end_time)
+    initial_playlist = PlaylistFetcher.fetch_for_vod(vod_id)
+    playlist = Chunks.get(initial_playlist.segments, start_time, end_time)
     if playlist.total_bytes == 0:
         Log.error('Nothing to download\n')
-    file_name = FileMaker.make_avoiding_overwrite(vod.name() + '.ts')
+    file_name = FileMaker.make_avoiding_overwrite(Vod.title(vod_id) + '.ts')
     PlaylistDownloader(playlist).download_to(file_name)
 
 

@@ -75,7 +75,7 @@ class Recorder:
 
     @staticmethod
     def __fetch_segments(channel):
-        playlist = Playlist.fetch_for(channel)
+        playlist = Playlist.fetch_for_channel(channel)
         if playlist is None:
             return []
         segments = playlist.segments
