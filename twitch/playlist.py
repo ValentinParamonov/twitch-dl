@@ -33,11 +33,11 @@ class Playlist:
 
     @staticmethod
     def fetch_playlist(link, token=None):
-        raw_playlist = Contents.utf8(
-            link,
-            params={'token': token['token'], 'sig': token['sig']} if token else {},
-            onerror=lambda _: None
+        params = {'allow_source': 'true'}
+        params.update(
+            {'token': token['token'], 'sig': token['sig']} if token else {}
         )
+        raw_playlist = Contents.utf8(link, params=params, onerror=lambda _: None)
         if raw_playlist is None:
             return None
         return m3u8.loads(raw_playlist)
