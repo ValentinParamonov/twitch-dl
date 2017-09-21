@@ -3,3 +3,4 @@
 
 *.m3u8
 *.ts
+__pycache__
