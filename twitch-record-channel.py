@@ -8,10 +8,10 @@ import os
 
 import itertools
 import requests
-import m3u8
 from time import time, sleep
 import signal
 import uuid
+from twitch.playlist import Playlist
 
 
 class Stopwatch:
@@ -73,59 +73,15 @@ class Recorder:
                 return new_name
             new_name = re.sub(r'(\..+)$', r' {:02}\1'.format(i), file_name)
 
-    def __fetch_segments(self, channel):
-        playlist = self.__playlist_for(channel)
+    @staticmethod
+    def __fetch_segments(channel):
+        playlist = Playlist.fetch_for(channel)
         if playlist is None:
             return []
         segments = playlist.segments
         for segment in segments:
             segment.title = segment.uri.rsplit('/', 1)[1]
         return segments
-
-    def __playlist_for(self, channel):
-        token = self.__fetch_token(channel)
-        if token is None:
-            return None
-        playlist = self.__fetch_playlist(self.__playlist_link_for(channel), token)
-        if playlist is None:
-            return None
-        return self.__best_quality_playlist(playlist.playlists)
-
-    @classmethod
-    def __best_quality_playlist(cls, playlists):
-        playlists.sort(key=cls.__by_resolution_and_bandwidth)
-        best_playlist_uri = playlists[-1].uri
-        playlist = cls.__fetch_playlist(best_playlist_uri)
-        playlist.base_path = best_playlist_uri.rsplit('/', 1)[0]
-        return playlist
-
-    @staticmethod
-    def __by_resolution_and_bandwidth(playlist):
-        stream_info = playlist.stream_info
-        return stream_info.resolution, stream_info.bandwidth
-
-    def __fetch_token(self, channel):
-        response = requests.get(
-            'https://api.twitch.tv/api/channels/{}/access_token'.format(channel),
-            headers=self.client_id
-        )
-        if response.status_code != 200:
-            return None
-        return response.json()
-
-    @staticmethod
-    def __playlist_link_for(channel):
-        return 'https://usher.ttvnw.net/api/channel/hls/{}.m3u8'.format(channel)
-
-    @staticmethod
-    def __fetch_playlist(link, token=None):
-        response = requests.get(
-            link,
-            params={'token': token['token'], 'sig': token['sig']} if token else {}
-        )
-        if response.status_code != 200:
-            return None
-        return m3u8.loads(response.content.decode('utf8'))
 
     def __only_new(self, segments):
         return list(filter(lambda s: s.title not in self.downloaded, segments))
