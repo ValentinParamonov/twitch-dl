@@ -58,7 +58,7 @@ class Recorder:
     @staticmethod
     def __lookup_stream(channel):
         response = Contents.json(
-            'https://api.twitch.tv/kraken/streams/{}'.format(channel),
+            Twitch.stream_link.format(channel),
             headers=Twitch.client_id_header
         )
         if response['stream'] is None:
