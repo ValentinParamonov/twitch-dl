@@ -40,7 +40,10 @@ class Recorder:
             self.stopwatch.split()
             segments = self.__fetch_segments(channel)
             if len(segments) == 0:
-                print('Broadcast ended.')
+                if len(self.downloaded) != 0:
+                    print('Broadcast ended.')
+                else:
+                    print('Seems like the channel is offline')
                 return
             new_segments = self.__only_new(segments)
             self.__write(new_segments)
