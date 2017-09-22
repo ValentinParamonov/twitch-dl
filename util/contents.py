@@ -57,6 +57,7 @@ class Contents:
             return cls.__check_ok(requests.head(resource)).headers
         except Exception as e:
             Log.error(str(e))
+            exit(1)
 
     @staticmethod
     def __get(resource, params=None, headers=None):
@@ -69,6 +70,7 @@ class Contents:
             )
         except Exception as e:
             Log.error(str(e))
+            exit(1)
 
     @staticmethod
     def __check_ok(response, onerror=None):
@@ -80,6 +82,7 @@ class Contents:
                         statusCode=response.status_code
                     )
                 )
+                exit(1)
             else:
                 return Error(onerror(response.status_code))
         return response

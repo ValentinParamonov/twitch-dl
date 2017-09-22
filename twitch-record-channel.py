@@ -12,6 +12,7 @@ from time import time, sleep
 from twitch.constants import Twitch
 from twitch.playlist import Playlist
 from util.contents import Contents
+from util.log import Log
 
 
 class Stopwatch:
@@ -40,9 +41,10 @@ class Recorder:
             segments = self.__fetch_segments(channel)
             if len(segments) == 0:
                 if len(self.downloaded) != 0:
-                    print('Broadcast ended.')
+                    Log.info('Broadcast ended.')
                 else:
-                    print('Seems like the channel is offline')
+                    Log.error('Seems like the channel is offline')
+                    exit(1)
                 return
             new_segments = self.__only_new(segments)
             self.__write(new_segments)
@@ -124,7 +126,7 @@ class Recorder:
         self.stream_name = self.__lookup_stream(channel)
         if self.stream_name is None:
             return
-        print('Recording ' + self.stream_name)
+        Log.info('Recording ' + self.stream_name)
         old_file_name = self.file_name
         self.file_name = self.__next_vacant(self.stream_name + '.ts')
         os.rename(old_file_name, self.file_name)
@@ -135,8 +137,8 @@ class Recorder:
 
 if __name__ == '__main__':
     if (len(sys.argv)) != 2:
-        sys.stderr.write('Needs channel to record!\n')
-        sys.exit(1)
+        Log.error('Needs channel to record!\n')
+        exit(1)
     channel_name = sys.argv[1]
     recorder = Recorder()
     signal.signal(signal.SIGINT, lambda sig, frame: recorder.stop())

@@ -99,12 +99,15 @@ class CommandLineParser:
         (options, args) = self.parse_args()
         if len(args) != 1:
             Log.error(self.get_usage())
+            exit(1)
         if options.end_time <= options.start_time:
             Log.error("End time can't be earlier than start time\n")
+            exit(1)
         try:
             return options.start_time, options.end_time, int(args[0])
         except ValueError:
             Log.error(self.get_usage())
+            exit(1)
 
 
 class FileMaker:
