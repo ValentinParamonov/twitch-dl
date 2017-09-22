@@ -33,8 +33,13 @@ class Contents:
         ).content
 
     @classmethod
-    def json(cls, resource, params=None, headers=None):
-        return cls.__get_ok(resource, params=params, headers=headers).json()
+    def json(cls, resource, params=None, headers=None, onerror=None):
+        return cls.__get_ok(
+            resource,
+            params=params,
+            headers=headers,
+            onerror=onerror
+        ).json()
 
     @classmethod
     def __get_ok(cls, resource, params=None, headers=None, onerror=None):

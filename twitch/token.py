@@ -9,7 +9,11 @@ class Token:
 
     @classmethod
     def __fetch(cls, link):
-        return Contents.json(link, headers=Twitch.client_id_header)
+        return Contents.json(
+            link,
+            headers=Twitch.client_id_header,
+            onerror=lambda _: None
+        )
 
     @classmethod
     def fetch_for_vod(cls, vod_id):

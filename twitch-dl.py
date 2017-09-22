@@ -141,8 +141,11 @@ class PlaylistDownloader:
 
 def main():
     (start_time, end_time, vod_id) = CommandLineParser().parse_command_line()
-    initial_playlist = PlaylistFetcher.fetch_for_vod(vod_id)
-    playlist = Chunks.get(initial_playlist.segments, start_time, end_time)
+    m3u8_playlist = PlaylistFetcher.fetch_for_vod(vod_id)
+    if m3u8_playlist is None:
+        print("Seems like vod {} doesn't exist".format(vod_id))
+        exit(1)
+    playlist = Chunks.get(m3u8_playlist.segments, start_time, end_time)
     file_name = FileMaker.make_avoiding_overwrite(Vod.title(vod_id) + '.ts')
     PlaylistDownloader(playlist).download_to(file_name)
 
