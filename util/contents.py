@@ -1,7 +1,9 @@
+from collections import namedtuple
+
 import requests
 from requests import codes as status
+
 from util.log import Log
-from collections import namedtuple
 
 Content = namedtuple('Content', 'decode')
 

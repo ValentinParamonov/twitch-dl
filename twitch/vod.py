@@ -1,5 +1,5 @@
-from util.contents import Contents
 from twitch.constants import Twitch
+from util.contents import Contents
 
 
 class Vod:

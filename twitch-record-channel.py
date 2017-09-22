@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 
-import re
-import sys
-from collections import deque
-
-import os
-
 import itertools
-from time import time, sleep
+import os
+import re
 import signal
+import sys
 import uuid
-from twitch.playlist import Playlist
+from collections import deque
+from time import time, sleep
+
 from twitch.constants import Twitch
+from twitch.playlist import Playlist
 from util.contents import Contents
 
 
