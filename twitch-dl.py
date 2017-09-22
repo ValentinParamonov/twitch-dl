@@ -3,9 +3,7 @@
 import os
 import re
 import sys
-from concurrent.futures import ThreadPoolExecutor
 from optparse import OptionParser, OptionValueError
-from threading import Lock
 
 from twitch.playlist import Playlist as PlaylistFetcher
 from twitch.vod import Vod
@@ -13,16 +11,9 @@ from util.contents import Contents
 from util.log import Log
 
 
-class Chunk:
-    def __init__(self, url, file_offset):
-        self.url = url
-        self.file_offset = file_offset
-
-
 class Playlist:
-    def __init__(self, chunks, total_bytes):
-        self.chunks = chunks
-        self.total_bytes = total_bytes
+    def __init__(self, segments):
+        self.segments = segments
 
 
 class Chunks:
@@ -33,8 +24,7 @@ class Chunks:
             start_time,
             end_time
         )
-        chunks, total_bytes = cls.__to_chunks(cls.__with_length(clipped_segments))
-        return Playlist(chunks, total_bytes)
+        return Playlist(list(map(lambda segment: segment.uri, clipped_segments)))
 
     @staticmethod
     def __with_time(segments):
@@ -53,39 +43,18 @@ class Chunks:
             if (start + s.duration) > start_time and start < end_time
         ]
 
-    @classmethod
-    def __with_length(cls, segments):
-        return map(lambda s: (s, cls.__query_chunk_size(s.uri)), segments)
-
-    @staticmethod
-    def __query_chunk_size(chunk_uri):
-        return int(Contents.headers(chunk_uri)['content-length'])
-
-    @staticmethod
-    def __to_chunks(segments_with_length):
-        file_offset = 0
-        chunks = []
-        for segment, length in segments_with_length:
-            chunks.append(Chunk(segment.uri, file_offset))
-            file_offset += length
-        total_size = file_offset
-        return chunks, total_size
-
 
 class ProgressBar:
-    def __init__(self, file_name, file_size):
+    def __init__(self, file_name, total_segments):
         self.fileName = file_name
-        self.total = file_size
+        self.total = total_segments
         self.current = 0
-        self.lock = Lock()
         self.update_by(0)
 
-    def update_by(self, byte_count):
-        self.lock.acquire()
-        self.current += byte_count
+    def update_by(self, count):
+        self.current += count
         percent_completed = self.current / self.total * 100
         self.__print_bar(percent_completed)
-        self.lock.release()
 
     def __print_bar(self, percent_completed):
         Log.info('\r' + ' ' * self.__get_console_width())
@@ -160,45 +129,20 @@ class PlaylistDownloader:
 
     def download_to(self, file_name):
         playlist = self.playlist
-        progress_bar = ProgressBar(file_name, playlist.total_bytes)
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            for chunk in playlist.chunks:
-                executor.submit(
-                    self.__download_chunk_and_write_to_file,
-                    chunk,
-                    file_name
-                ).add_done_callback(self.__when_done(progress_bar))
-
-    def __when_done(self, progress_bar):
-        return lambda chunk: self.__on_chunk_processed(chunk, progress_bar)
-
-    def __download_chunk_and_write_to_file(self, chunk: Chunk, file_name):
-        chunk_contents = Contents.chunked(chunk.url)
-        return self.__write_contents(chunk_contents, file_name, chunk.file_offset)
-
-    @staticmethod
-    def __write_contents(chunk_contents, file_name, offset):
-        with open(file_name, 'rb+') as file:
-            file.seek(offset)
-            bytes_written = 0
-            for chunk in chunk_contents.iter_content(chunk_size=2048):
-                if chunk:
-                    bytes_written += file.write(chunk)
-            return bytes_written
-
-    @staticmethod
-    def __on_chunk_processed(chunk, progress_bar):
-        if chunk.exception():
-            Log.error(str(chunk.exception()))
-        progress_bar.update_by(chunk.result())
+        progress_bar = ProgressBar(file_name, len(playlist.segments))
+        with open(file_name, 'wb+') as file:
+            for segment in playlist.segments:
+                chunks = Contents.chunked(segment).iter_content(chunk_size=2048)
+                for chunk in chunks:
+                    if chunk:
+                        file.write(chunk)
+                progress_bar.update_by(1)
 
 
 def main():
     (start_time, end_time, vod_id) = CommandLineParser().parse_command_line()
     initial_playlist = PlaylistFetcher.fetch_for_vod(vod_id)
     playlist = Chunks.get(initial_playlist.segments, start_time, end_time)
-    if playlist.total_bytes == 0:
-        Log.error('Nothing to download\n')
     file_name = FileMaker.make_avoiding_overwrite(Vod.title(vod_id) + '.ts')
     PlaylistDownloader(playlist).download_to(file_name)
 
