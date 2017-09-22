@@ -2,6 +2,7 @@
 
 import os
 import re
+import signal
 import sys
 from optparse import OptionParser, OptionValueError
 
@@ -126,16 +127,23 @@ class FileMaker:
 class PlaylistDownloader:
     def __init__(self, playlist: Playlist):
         self.playlist = playlist
+        self.stopped = False
 
     def download_to(self, file_name):
         playlist = self.playlist
         progress_bar = ProgressBar(file_name, len(playlist.segments))
         with open(file_name, 'wb+') as file:
             for segment in playlist.segments:
+                if self.stopped:
+                    print('')
+                    break
                 for chunk in Contents.chunked(segment):
                     if chunk:
                         file.write(chunk)
                 progress_bar.update_by(1)
+
+    def stop(self):
+        self.stopped = True
 
 
 def main():
@@ -146,7 +154,9 @@ def main():
         exit(1)
     playlist = Chunks.get(m3u8_playlist.segments, start_time, end_time)
     file_name = FileMaker.make_avoiding_overwrite(Vod.title(vod_id) + '.ts')
-    PlaylistDownloader(playlist).download_to(file_name)
+    downloader = PlaylistDownloader(playlist)
+    signal.signal(signal.SIGINT, lambda sig, frame: downloader.stop())
+    downloader.download_to(file_name)
 
 
 if __name__ == '__main__':
