@@ -7,11 +7,12 @@ from collections import deque
 import os
 
 import itertools
-import requests
 from time import time, sleep
 import signal
 import uuid
 from twitch.playlist import Playlist
+from twitch.constants import Twitch
+from util.contents import Contents
 
 
 class Stopwatch:
@@ -28,7 +29,6 @@ class Stopwatch:
 class Recorder:
     def __init__(self):
         self.recording = True
-        self.client_id = {'Client-ID': 'jzkbprff40iqj646a697cyrvl0zt2m6'}
         self.downloaded = deque(maxlen=8)
         self.stopwatch = Stopwatch()
         self.sleep_seconds = 10
@@ -56,17 +56,15 @@ class Recorder:
             if time_to_sleep > 0:
                 sleep(time_to_sleep)
 
-    def __lookup_stream(self, channel):
-        response = requests.get(
+    @staticmethod
+    def __lookup_stream(channel):
+        response = Contents.json(
             'https://api.twitch.tv/kraken/streams/{}'.format(channel),
-            headers=self.client_id
+            headers=Twitch.client_id_header
         )
-        if response.status_code != 200:
+        if response['stream'] is None:
             return None
-        json = response.json()
-        if json['stream'] is None:
-            return None
-        return json['stream']['channel']['status']
+        return response['stream']['channel']['status']
 
     @staticmethod
     def __next_vacant(file_name: str):
@@ -105,8 +103,7 @@ class Recorder:
     def __write(self, segments):
         with open(self.file_name, 'ab') as file:
             for segment in segments:
-                chunks = requests.get(segment.uri)
-                for chunk in chunks.iter_content(chunk_size=2048):
+                for chunk in Contents.chunked(segment.uri):
                     if chunk:
                         file.write(chunk)
 
