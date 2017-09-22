@@ -11,6 +11,7 @@ class Error:
         self.headers = value
         self.content = Content(decode=lambda _: value)
         self.json = lambda: value
+        self.iter_content = lambda chunk_size: value
 
 
 class Contents:
@@ -83,4 +84,4 @@ class Contents:
 
     @classmethod
     def chunked(cls, resource):
-        return cls.__get_ok(resource)
+        return cls.__get_ok(resource).iter_content(chunk_size=2048)

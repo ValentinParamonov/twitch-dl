@@ -132,8 +132,7 @@ class PlaylistDownloader:
         progress_bar = ProgressBar(file_name, len(playlist.segments))
         with open(file_name, 'wb+') as file:
             for segment in playlist.segments:
-                chunks = Contents.chunked(segment).iter_content(chunk_size=2048)
-                for chunk in chunks:
+                for chunk in Contents.chunked(segment):
                     if chunk:
                         file.write(chunk)
                 progress_bar.update_by(1)
