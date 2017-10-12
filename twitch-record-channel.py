@@ -40,12 +40,10 @@ class Recorder:
             self.stopwatch.split()
             segments = self.__fetch_segments(channel)
             if len(segments) == 0:
-                if len(self.downloaded) != 0:
-                    Log.info('Broadcast ended.')
-                else:
+                if len(self.downloaded) == 0:
                     Log.error('Seems like the channel is offline')
                     exit(1)
-                return
+                break
             new_segments = self.__only_new(segments)
             self.__write(new_segments)
             if self.__segments_lost(new_segments):
@@ -56,6 +54,7 @@ class Recorder:
             time_to_sleep = self.sleep_seconds - 2 * self.stopwatch.split()
             if time_to_sleep > 0:
                 sleep(time_to_sleep)
+        Log.info('Broadcast ended.')
 
     @staticmethod
     def __lookup_stream(channel):
