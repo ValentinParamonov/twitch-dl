@@ -98,16 +98,13 @@ class CommandLineParser:
     def parse_command_line(self):
         (options, args) = self.parse_args()
         if len(args) != 1:
-            Log.error(self.get_usage())
-            exit(1)
+            Log.fatal(self.get_usage())
         if options.end_time <= options.start_time:
-            Log.error("End time can't be earlier than start time\n")
-            exit(1)
+            Log.fatal("End time can't be earlier than start time\n")
         try:
             return options.start_time, options.end_time, int(args[0])
         except ValueError:
-            Log.error(self.get_usage())
-            exit(1)
+            Log.fatal(self.get_usage())
 
 
 class FileMaker:
@@ -153,8 +150,7 @@ def main():
     (start_time, end_time, vod_id) = CommandLineParser().parse_command_line()
     m3u8_playlist = PlaylistFetcher.fetch_for_vod(vod_id)
     if m3u8_playlist is None:
-        print("Seems like vod {} doesn't exist".format(vod_id))
-        exit(1)
+        Log.fatal("Seems like vod {} doesn't exist".format(vod_id))
     playlist = Chunks.get(m3u8_playlist.segments, start_time, end_time)
     file_name = FileMaker.make_avoiding_overwrite(Vod.title(vod_id) + '.ts')
     downloader = PlaylistDownloader(playlist)

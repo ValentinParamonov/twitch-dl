@@ -56,7 +56,7 @@ class Contents:
         try:
             return cls.__check_ok(requests.head(resource)).headers
         except Exception as e:
-            Log.error(str(e))
+            Log.fatal(str(e))
             exit(1)
 
     @staticmethod
@@ -69,14 +69,14 @@ class Contents:
                 stream=True
             )
         except Exception as e:
-            Log.error(str(e))
+            Log.fatal(str(e))
             exit(1)
 
     @staticmethod
     def __check_ok(response, onerror=None):
         if response.status_code != status.ok:
             if onerror is None:
-                Log.error(
+                Log.fatal(
                     'Failed to get {url}: got {statusCode} response'.format(
                         url=response.url,
                         statusCode=response.status_code
@@ -88,5 +88,5 @@ class Contents:
         return response
 
     @classmethod
-    def chunked(cls, resource):
-        return cls.__get_ok(resource).iter_content(chunk_size=2048)
+    def chunked(cls, resource, onerror=None):
+        return cls.__get_ok(resource, onerror=onerror).iter_content(chunk_size=2048)

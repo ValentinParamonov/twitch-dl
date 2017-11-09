@@ -9,8 +9,7 @@ from util.log import Log
 
 def main():
     if (len(sys.argv)) != 2:
-        Log.error('Needs channel to record!\n')
-        exit(1)
+        Log.fatal('Needs channel to record!\n')
     channel_name = sys.argv[1]
     recorder = Recorder()
     signal.signal(signal.SIGINT, lambda sig, frame: recorder.stop())
