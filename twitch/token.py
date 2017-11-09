@@ -1,11 +1,24 @@
+import json
+from time import time
+
 from twitch.constants import Twitch
 from util.contents import Contents
 
 
 class Token:
-    @classmethod
-    def fetch_for_channel(cls, channel_name):
-        return cls.__fetch(Twitch.channel_token_link.format(channel_name))
+    __expiration_buffer_ms = 200
+
+    def __init__(self):
+        self.__token = None
+
+    def fetch_for_channel(self, channel_name):
+        if not self.__token or self.__is_expired(self.__token):
+            self.__token = self.__fetch(Twitch.channel_token_link.format(channel_name))
+        return self.__token
+
+    @staticmethod
+    def __is_expired(token):
+        return json.loads(token['token'])['expires'] - Token.__expiration_buffer_ms < time()
 
     @classmethod
     def __fetch(cls, link):

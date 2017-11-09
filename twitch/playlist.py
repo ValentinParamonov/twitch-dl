@@ -6,11 +6,13 @@ from util.contents import Contents
 
 
 class Playlist:
-    @classmethod
-    def fetch_for_channel(cls, channel_name):
-        token = Token.fetch_for_channel(channel_name)
+    def __init__(self):
+        self.__token = Token()
+
+    def fetch_for_channel(self, channel_name):
+        token = self.__token.fetch_for_channel(channel_name)
         playlist_link = Twitch.channel_playlist_link.format(channel_name)
-        return cls.__fetch_playlist(playlist_link, token)
+        return self.__fetch_playlist(playlist_link, token)
 
     @classmethod
     def __fetch_playlist(cls, playlist_link, token):
