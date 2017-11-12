@@ -1,7 +1,6 @@
 import itertools
 import os
 import re
-import sys
 import uuid
 from collections import deque
 from time import sleep
@@ -15,30 +14,30 @@ from util.stopwatch import Stopwatch
 
 class Recorder:
     def __init__(self):
-        self.recording = True
-        self.downloaded = deque(maxlen=8)
-        self.stopwatch = Stopwatch()
-        self.sleep_seconds = 10
-        self.file_name = uuid.uuid4().hex + '.ts'
-        self.stream_name = None
+        self.__recording = True
+        self.__downloaded = deque(maxlen=8)
+        self.__stopwatch = Stopwatch()
+        self.__sleep_seconds = 10
+        self.__file_name = uuid.uuid4().hex + '.ts'
+        self.__stream_name = None
+        self.__playlist = Playlist()
 
     def record(self, channel):
-        while self.recording:
-            self.stopwatch.split()
+        while self.__recording:
+            self.__stopwatch.split()
             segments = self.__fetch_segments(channel)
             if len(segments) == 0:
-                if len(self.downloaded) == 0:
-                    Log.error('Seems like the channel is offline')
-                    exit(1)
+                if len(self.__downloaded) == 0:
+                    Log.fatal('Seems like the channel is offline')
                 break
             new_segments = self.__only_new(segments)
             self.__write(new_segments)
             if self.__segments_lost(new_segments):
-                sys.stderr.write('Lost segments detected!\n')
+                Log.error('Lost segments detected!\n')
             self.__store_downloaded(new_segments)
             self.__adjust_sleep(len(segments) - len(new_segments))
             self.__rename_recording_if_stream_name_became_known_for(channel)
-            time_to_sleep = self.sleep_seconds - 2 * self.stopwatch.split()
+            time_to_sleep = self.__sleep_seconds - 2 * self.__stopwatch.split()
             if time_to_sleep > 0:
                 sleep(time_to_sleep)
         Log.info('Broadcast ended.')
@@ -61,9 +60,8 @@ class Recorder:
                 return new_name
             new_name = re.sub(r'(\..+)$', r' {:02}\1'.format(i), file_name)
 
-    @staticmethod
-    def __fetch_segments(channel):
-        playlist = Playlist.fetch_for_channel(channel)
+    def __fetch_segments(self, channel):
+        playlist = self.__playlist.fetch_for_channel(channel)
         if playlist is None:
             return []
         segments = playlist.segments
@@ -72,12 +70,12 @@ class Recorder:
         return segments
 
     def __only_new(self, segments):
-        return list(filter(lambda s: s.title not in self.downloaded, segments))
+        return list(filter(lambda s: s.title not in self.__downloaded, segments))
 
     def __segments_lost(self, new_segments):
-        return False if len(self.downloaded) == 0 else \
+        return False if len(self.__downloaded) == 0 else \
             self.__segment_index(new_segments[0].title) \
-            != self.__segment_index(self.downloaded[-1]) + 1
+            != self.__segment_index(self.__downloaded[-1]) + 1
 
     @staticmethod
     def __segment_index(segment_title):
@@ -85,10 +83,10 @@ class Recorder:
 
     def __store_downloaded(self, new_segments):
         for segment in new_segments:
-            self.downloaded.append(segment.title)
+            self.__downloaded.append(segment.title)
 
     def __write(self, segments):
-        with open(self.file_name, 'ab') as file:
+        with open(self.__file_name, 'ab') as file:
             for segment in segments:
                 for chunk in Contents.chunked(segment.uri):
                     if chunk:
@@ -96,26 +94,26 @@ class Recorder:
 
     def __adjust_sleep(self, old_segment_count):
         if old_segment_count == 0:
-            self.sleep_seconds -= 0.5
+            self.__sleep_seconds -= 0.5
         elif old_segment_count == 1:
-            self.sleep_seconds -= 0.05
+            self.__sleep_seconds -= 0.05
         elif old_segment_count == 2:
-            self.sleep_seconds += 0.1
+            self.__sleep_seconds += 0.1
         elif old_segment_count == 3:
-            self.sleep_seconds += 0.3
+            self.__sleep_seconds += 0.3
         else:
-            self.sleep_seconds += 0.5
+            self.__sleep_seconds += 0.5
 
     def __rename_recording_if_stream_name_became_known_for(self, channel):
-        if self.stream_name:
+        if self.__stream_name:
             return
-        self.stream_name = self.__lookup_stream(channel)
-        if self.stream_name is None:
+        self.__stream_name = self.__lookup_stream(channel)
+        if self.__stream_name is None:
             return
-        Log.info('Recording ' + self.stream_name)
-        old_file_name = self.file_name
-        self.file_name = self.__next_vacant(self.stream_name + '.ts')
-        os.rename(old_file_name, self.file_name)
+        Log.info('Recording ' + self.__stream_name)
+        old_file_name = self.__file_name
+        self.__file_name = self.__next_vacant(self.__stream_name + '.ts')
+        os.rename(old_file_name, self.__file_name)
 
     def stop(self):
-        self.recording = False
+        self.__recording = False
