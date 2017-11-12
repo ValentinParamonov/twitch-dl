@@ -5,6 +5,7 @@ import re
 import signal
 import sys
 from optparse import OptionParser, OptionValueError
+from sys import stdout
 
 from twitch.playlist import Playlist as PlaylistFetcher
 from twitch.vod import Vod
@@ -58,8 +59,8 @@ class ProgressBar:
         self.__print_bar(percent_completed)
 
     def __print_bar(self, percent_completed):
-        Log.info('\r' + ' ' * self.__get_console_width())
-        Log.info('\r{file} [{percents:3.0f}%]{terminator}'.format(
+        stdout.write('\r' + ' ' * self.__get_console_width())
+        stdout.write('\r{file} [{percents:3.0f}%]{terminator}'.format(
             file=self.fileName,
             percents=percent_completed,
             terminator='\n' if self.current == self.total else ''))
