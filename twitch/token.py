@@ -18,7 +18,8 @@ class Token:
 
     @staticmethod
     def __is_expired(token):
-        return json.loads(token['token'])['expires'] - Token.__expiration_buffer_ms < time()
+        token_expiration_ms = json.loads(token['token'])['expires']
+        return token_expiration_ms - Token.__expiration_buffer_ms < time()
 
     @classmethod
     def __fetch(cls, link):
