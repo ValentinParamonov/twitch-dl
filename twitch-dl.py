@@ -148,7 +148,7 @@ class PlaylistDownloader:
 
 def main():
     (start_time, end_time, vod_id) = CommandLineParser().parse_command_line()
-    m3u8_playlist = PlaylistFetcher.fetch_for_vod(vod_id)
+    m3u8_playlist = PlaylistFetcher().fetch_for_vod(vod_id)
     if m3u8_playlist is None:
         Log.fatal("Seems like vod {} doesn't exist".format(vod_id))
     playlist = Chunks.get(m3u8_playlist.segments, start_time, end_time)
