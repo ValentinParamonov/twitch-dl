@@ -32,8 +32,7 @@ class Recorder:
                 break
             new_segments = self.__only_new(segments)
             self.__write(new_segments)
-            if self.__segments_lost(new_segments):
-                Log.error('Lost segments detected!\n')
+            self.__check_if_segments_lost(new_segments)
             self.__store_downloaded(new_segments)
             self.__adjust_sleep(len(segments) - len(new_segments))
             self.__rename_recording_if_stream_name_became_known_for(channel)
@@ -72,10 +71,18 @@ class Recorder:
     def __only_new(self, segments):
         return list(filter(lambda s: s.title not in self.__downloaded, segments))
 
-    def __segments_lost(self, new_segments):
-        return False if len(self.__downloaded) == 0 else \
-            self.__segment_index(new_segments[0].title) \
-            != self.__segment_index(self.__downloaded[-1]) + 1
+    def __check_if_segments_lost(self, new_segments):
+        if len(self.__downloaded) == 0 or len(new_segments) == 0:
+            return
+        first_new = self.__segment_index(new_segments[0].title)
+        last_downloaded = self.__segment_index(self.__downloaded[-1])
+        if first_new != last_downloaded + 1:
+            Log.error(
+                "Lost segments detected!\nFirst new: {}\nLast downloaded: {}".format(
+                    first_new,
+                    last_downloaded
+                )
+            )
 
     @staticmethod
     def __segment_index(segment_title):
