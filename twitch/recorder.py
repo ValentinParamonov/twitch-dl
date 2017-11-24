@@ -103,10 +103,12 @@ class Recorder:
         if old_segment_count == 0:
             self.__sleep_seconds -= 0.5
         elif old_segment_count == 1:
-            self.__sleep_seconds -= 0.2
+            self.__sleep_seconds -= 0.3
         elif old_segment_count == 2:
-            self.__sleep_seconds -= 0.05
+            self.__sleep_seconds -= 0.1
         elif old_segment_count == 3:
+            self.__sleep_seconds += 0.05
+        elif old_segment_count == 4:
             self.__sleep_seconds += 0.1
         else:
             self.__sleep_seconds += 0.3
