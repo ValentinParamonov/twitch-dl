@@ -15,7 +15,7 @@ from util.stopwatch import Stopwatch
 class Recorder:
     def __init__(self):
         self.__recording = True
-        self.__downloaded = deque(maxlen=8)
+        self.__downloaded = deque(maxlen=32)
         self.__stopwatch = Stopwatch()
         self.__sleep_seconds = 10
         self.__file_name = uuid.uuid4().hex + '.ts'
@@ -32,7 +32,7 @@ class Recorder:
                 break
             new_segments = self.__only_new(segments)
             self.__write(new_segments)
-            self.__check_if_segments_lost(new_segments)
+            self.__check_if_segments_lost(segments)
             self.__store_downloaded(new_segments)
             self.__adjust_sleep(len(segments) - len(new_segments))
             self.__rename_recording_if_stream_name_became_known_for(channel)
@@ -65,28 +65,18 @@ class Recorder:
             return []
         segments = playlist.segments
         for segment in segments:
-            segment.title = segment.uri.rsplit('/', 1)[1]
+            segment.title = segment.uri.rsplit('/', 1)[1][:16]
         return segments
 
     def __only_new(self, segments):
         return list(filter(lambda s: s.title not in self.__downloaded, segments))
 
-    def __check_if_segments_lost(self, new_segments):
-        if len(self.__downloaded) == 0 or len(new_segments) == 0:
+    def __check_if_segments_lost(self, segments):
+        if len(self.__downloaded) == 0 or len(segments) == 0:
             return
-        first_new = self.__segment_index(new_segments[0].title)
-        last_downloaded = self.__segment_index(self.__downloaded[-1])
-        if first_new != last_downloaded + 1:
-            Log.error(
-                "Lost segments detected!\nFirst new: {}\nLast downloaded: {}".format(
-                    first_new,
-                    last_downloaded
-                )
-            )
-
-    @staticmethod
-    def __segment_index(segment_title):
-        return int(segment_title.split('-')[1])
+        if segments[0].title not in self.__downloaded:
+            Log.error('Lost segments detected!')
+            Log.error("The first downloaded segment hasn't been seen before!")
 
     def __store_downloaded(self, new_segments):
         for segment in new_segments:

@@ -13,31 +13,20 @@ class Playlist:
 
     def fetch_for_channel(self, channel_name):
         if self.__best_quality_link:
-            return self.__fetch_playlist_with_base_path(self.__best_quality_link)
+            return self.fetch_playlist(self.__best_quality_link)
         return self.__fetch_new(channel_name)
 
     def __fetch_new(self, channel_name):
         token = self.__token.fetch_for_channel(channel_name)
         playlist_link = Twitch.channel_playlist_link.format(channel_name)
-        return self.__skip_v1_playlist(playlist_link, token)
-
-    def __skip_v1_playlist(self, playlist_link, token):
-        """
-        Twitch will send two playlist. v1 and v0.
-        We'll ignore the v1 playlist witch contains "weaver" in URL
-        """
-        while True:
-            playlist = self.__fetch_playlist(playlist_link, token)
-            if 'weaver' in (playlist.base_path or ''):
-                continue
-            return playlist
+        return self.__fetch_playlist(playlist_link, token)
 
     def __fetch_playlist(self, playlist_link, token):
         playlist_container = self.fetch_playlist(playlist_link, token)
         if len(playlist_container.playlists) == 0:
             return playlist_container
         self.__best_quality_link = playlist_container.playlists[0].uri
-        return self.__fetch_playlist_with_base_path(self.__best_quality_link)
+        return self.fetch_playlist(self.__best_quality_link)
 
     @staticmethod
     def fetch_playlist(link, token=None):
@@ -49,12 +38,6 @@ class Playlist:
         if raw_playlist is None:
             return M3U8(None)
         return m3u8.loads(raw_playlist)
-
-    @classmethod
-    def __fetch_playlist_with_base_path(cls, uri):
-        playlist = cls.fetch_playlist(uri)
-        playlist.base_path = uri.rsplit('/', 1)[0]
-        return playlist
 
     def fetch_for_vod(self, vod_id):
         token = Token.fetch_for_vod(vod_id)
