@@ -42,4 +42,6 @@ class Playlist:
     def fetch_for_vod(self, vod_id):
         token = Token.fetch_for_vod(vod_id)
         playlist_link = Twitch.vod_playlist_link.format(vod_id)
-        return self.__fetch_playlist(playlist_link, token)
+        playlist = self.__fetch_playlist(playlist_link, token)
+        playlist.base_path = self.__best_quality_link.rsplit('/', 1)[0]
+        return playlist
