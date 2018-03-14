@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
-import sys
+from argparse import ArgumentParser
+from sys import stdin, stdout, stderr
 
 from twitch.constants import Twitch
 from util.contents import Contents
@@ -8,16 +9,39 @@ from util.contents import Contents
 
 def main():
     try:
-        user_id = sys.argv[1] if len(sys.argv) > 1 else sys.stdin.readline().strip()
-        video_name = sys.stdin.readline().strip()
-        video_id = video_id_of(user_id, video_name)
-        sys.stdout.write(video_id + os.linesep)
+        args = parse_args()
+        user_id = cmdline_or_stdin(args.user_id)
+        video_name = cmdline_or_stdin(args.video_name)
+        video = video_of(user_id, video_name)
+        attribute_name = args.attribute
+        if attribute_name not in video:
+            raise ValueError('Video has no attribute "{}"'.format(attribute_name))
+        video_attribute = video[attribute_name]
+        stdout.write(video_attribute + os.linesep)
     except ValueError as error:
-        sys.stderr.write(str(error) + os.linesep)
+        stderr.write(str(error) + os.linesep)
         exit(1)
 
 
-def video_id_of(user_id, video_name):
+def cmdline_or_stdin(arg):
+    return arg if arg else stdin.readline().strip()
+
+
+def parse_args():
+    parser = ArgumentParser()
+    parser.add_argument('user_id', nargs='?')
+    parser.add_argument('video_name', nargs='?')
+    parser.add_argument(
+        '-a',
+        '--attribute',
+        metavar='NAME',
+        help='print video attribute by name',
+        default='id'
+    )
+    return parser.parse_args()
+
+
+def video_of(user_id, video_name):
     videos = videos_of(user_id)
     video = next(
         (
@@ -28,7 +52,7 @@ def video_id_of(user_id, video_name):
     )
     if not video:
         raise ValueError('Video could not be found!')
-    return video['id']
+    return video
 
 
 def videos_of(user_id):
