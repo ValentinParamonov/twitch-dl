@@ -35,7 +35,7 @@ def parse_args():
         '-a',
         '--attribute',
         metavar='NAME',
-        help='print video attribute by name',
+        help='print video attribute by name (defaults to "id")',
         default='id'
     )
     return parser.parse_args()
