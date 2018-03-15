@@ -16,7 +16,7 @@ def main():
         if args.list_attributes:
             list_attributes_of(video)
         else:
-            print_attribute(video, args.attribute)
+            print_attribute(video, args.name)
     except ValueError as error:
         stderr.write(str(error) + os.linesep)
         exit(1)
@@ -31,8 +31,8 @@ def parse_args():
     parser.add_argument('user_id', nargs='?')
     parser.add_argument('video_name', nargs='?')
     parser.add_argument(
-        '-a',
-        '--attribute',
+        '-n',
+        '--name',
         metavar='NAME',
         help='print video attribute by NAME (defaults to "id")',
         default='id'
