@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os
 from argparse import ArgumentParser
-from sys import stdin, stdout, stderr
+from sys import stdin, stderr, stdout
 
 from twitch.constants import Twitch
 from util.contents import Contents
@@ -13,11 +13,10 @@ def main():
         user_id = cmdline_or_stdin(args.user_id)
         video_name = cmdline_or_stdin(args.video_name)
         video = video_of(user_id, video_name)
-        attribute_name = args.attribute
-        if attribute_name not in video:
-            raise ValueError('Video has no attribute "{}"'.format(attribute_name))
-        video_attribute = video[attribute_name]
-        stdout.write(video_attribute + os.linesep)
+        if args.list_attributes:
+            list_attributes_of(video)
+        else:
+            print_attribute(video, args.attribute)
     except ValueError as error:
         stderr.write(str(error) + os.linesep)
         exit(1)
@@ -35,8 +34,15 @@ def parse_args():
         '-a',
         '--attribute',
         metavar='NAME',
-        help='print video attribute by name (defaults to "id")',
+        help='print video attribute by NAME (defaults to "id")',
         default='id'
+    )
+    parser.add_argument(
+        '-l',
+        '--list-attributes',
+        help='show the list of attribute names',
+        action='store_true',
+        default=False
     )
     return parser.parse_args()
 
@@ -77,6 +83,18 @@ def videos_of(user_id):
 
 def raise_error(message):
     raise ValueError(message)
+
+
+def list_attributes_of(video):
+    for attribute in sorted(video.keys()):
+        stdout.write(attribute + os.linesep)
+
+
+def print_attribute(video, attribute_name):
+    if attribute_name not in video:
+        raise ValueError('Video has no attribute "{}"'.format(attribute_name))
+    video_attribute = video[attribute_name]
+    stdout.write(video_attribute + os.linesep)
 
 
 if __name__ == '__main__':
