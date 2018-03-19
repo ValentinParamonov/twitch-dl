@@ -89,4 +89,4 @@ class Contents:
 
     @classmethod
     def chunked(cls, resource, onerror=None):
-        return cls.__get_ok(resource, onerror=onerror).iter_content(chunk_size=2048)
+        return cls.__get_ok(resource, onerror=onerror).iter_content(chunk_size=2097152)
