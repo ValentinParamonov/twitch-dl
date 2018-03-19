@@ -4,8 +4,7 @@ from sys import stderr, stdout, exit
 class Log:
     @staticmethod
     def fatal(msg):
-        stderr.write(msg + '\n')
-        stderr.flush()
+        Log.error(msg)
         exit(1)
 
     @staticmethod
