@@ -138,9 +138,12 @@ class PlaylistDownloader:
                 if self.stopped:
                     print('')
                     break
-                for chunk in Contents.chunked(segment):
-                    if chunk:
-                        file.write(chunk)
+                try:
+                    for chunk in Contents.chunked(segment):
+                        if chunk:
+                            file.write(chunk)
+                except IOError as e:
+                    Log.fatal(str(e))
                 progress_bar.update_by(1)
 
     def stop(self):
