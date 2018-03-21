@@ -23,6 +23,7 @@ class Recorder:
         self.__playlist = Playlist()
 
     def record(self, channel):
+        consecutive_times_received_no_new_segments = 0
         while self.__recording:
             self.__stopwatch.split()
             segments = self.__fetch_segments(channel)
@@ -31,6 +32,12 @@ class Recorder:
                     Log.fatal('Seems like the channel is offline')
                 break
             new_segments = self.__only_new(segments)
+            if len(new_segments) == 0:
+                consecutive_times_received_no_new_segments += 1
+                if consecutive_times_received_no_new_segments == 2:
+                    break
+            else:
+                consecutive_times_received_no_new_segments = 0
             self.__write(new_segments)
             self.__check_if_segments_lost(segments)
             self.__store_downloaded(new_segments)
