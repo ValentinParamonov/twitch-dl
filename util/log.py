@@ -1,3 +1,4 @@
+import os
 from sys import stderr, stdout, exit
 
 
@@ -9,10 +10,10 @@ class Log:
 
     @staticmethod
     def info(msg):
-        stdout.write(msg + '\n')
+        stdout.write(msg + os.linesep)
         stdout.flush()
 
     @staticmethod
     def error(msg):
-        stderr.write(msg + '\n')
+        stderr.write(msg + os.linesep)
         stderr.flush()
