@@ -17,7 +17,7 @@ class Recorder:
         self.__recording = True
         self.__downloaded = deque(maxlen=32)
         self.__stopwatch = Stopwatch()
-        self.__sleep_seconds = 10
+        self.__sleep_seconds = 5
         self.__file_name = uuid.uuid4().hex + '.ts'
         self.__stream_name = None
         self.__playlist = Playlist()
@@ -34,14 +34,13 @@ class Recorder:
             new_segments = self.__only_new(segments)
             if len(new_segments) == 0:
                 consecutive_times_received_no_new_segments += 1
-                if consecutive_times_received_no_new_segments == 2:
+                if consecutive_times_received_no_new_segments == 3:
                     break
             else:
                 consecutive_times_received_no_new_segments = 0
             self.__write(new_segments)
             self.__check_if_segments_lost(segments)
             self.__store_downloaded(new_segments)
-            self.__adjust_sleep(len(segments) - len(new_segments))
             self.__rename_recording_if_stream_name_became_known_for(channel)
             time_to_sleep = self.__sleep_seconds - 2 * self.__stopwatch.split()
             if time_to_sleep > 0:
@@ -94,21 +93,10 @@ class Recorder:
             for segment in segments:
                 for chunk in Contents.chunked(segment.uri):
                     if chunk:
-                        file.write(chunk)
-
-    def __adjust_sleep(self, old_segment_count):
-        if old_segment_count == 0:
-            self.__sleep_seconds -= 0.5
-        elif old_segment_count == 1:
-            self.__sleep_seconds -= 0.3
-        elif old_segment_count == 2:
-            self.__sleep_seconds -= 0.1
-        elif old_segment_count == 3:
-            self.__sleep_seconds += 0.05
-        elif old_segment_count == 4:
-            self.__sleep_seconds += 0.1
-        else:
-            self.__sleep_seconds += 0.3
+                        try:
+                            file.write(chunk)
+                        except IOError as e:
+                            Log.error(str(e))
 
     def __rename_recording_if_stream_name_became_known_for(self, channel):
         if self.__stream_name:
