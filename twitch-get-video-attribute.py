@@ -12,11 +12,11 @@ def main():
         args = parse_args()
         user_id = cmdline_or_stdin(args.user_id)
         video_name = cmdline_or_stdin(args.video_name)
-        video = video_of(user_id, video_name)
+        videos = matching_videos_of(user_id, video_name)
         if args.list_attributes:
-            list_attributes_of(video)
+            list_attributes_of(videos[0])
         else:
-            print_attribute(video, args.name)
+            print_attribute(videos, args.name)
     except ValueError as error:
         stderr.write(str(error) + os.linesep)
         exit(1)
@@ -47,18 +47,15 @@ def parse_args():
     return parser.parse_args()
 
 
-def video_of(user_id, video_name):
+def matching_videos_of(user_id, video_name):
     videos = videos_of(user_id)
-    video = next(
-        (
-            video for video in videos
-            if video['title'].strip().lower() == video_name.strip().lower()
-        ),
-        None
-    )
-    if not video:
-        raise ValueError('Video could not be found!')
-    return video
+    matched_videos = list(filter(
+        lambda video: video['title'].strip().lower() == video_name.strip().lower(),
+        videos
+    ))
+    if len(matched_videos) == 0:
+        raise ValueError('No matching videos found!')
+    return matched_videos
 
 
 def videos_of(user_id):
@@ -90,11 +87,12 @@ def list_attributes_of(video):
         stdout.write(attribute + os.linesep)
 
 
-def print_attribute(video, attribute_name):
-    if attribute_name not in video:
-        raise ValueError('Video has no attribute "{}"'.format(attribute_name))
-    video_attribute = video[attribute_name]
-    stdout.write(video_attribute + os.linesep)
+def print_attribute(videos, attribute_name):
+    for video in videos:
+        if attribute_name not in video:
+            raise ValueError('Video has no attribute "{}"'.format(attribute_name))
+        video_attribute = video[attribute_name]
+        stdout.write(video_attribute + os.linesep)
 
 
 if __name__ == '__main__':
