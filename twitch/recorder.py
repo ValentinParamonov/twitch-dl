@@ -45,7 +45,10 @@ class Recorder:
             time_to_sleep = self.__sleep_seconds - 2 * self.__stopwatch.split()
             if time_to_sleep > 0:
                 sleep(time_to_sleep)
-        Log.info('Broadcast ended.')
+        if self.__recording:
+            Log.info('Broadcast ended.')
+        else:
+            Log.info('Stopped.')
 
     @staticmethod
     def __lookup_stream(channel):
