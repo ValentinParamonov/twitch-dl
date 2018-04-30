@@ -74,8 +74,13 @@ class Recorder:
             return []
         segments = playlist.segments
         for segment in segments:
-            segment.title = segment.uri.rsplit('/', 1)[1][:16]
+            segment.title = self.strip_extension_and_take_last_n_chars(segment.uri, 16)
         return segments
+
+    @staticmethod
+    def strip_extension_and_take_last_n_chars(uri, n):
+        extension_length = 3
+        return uri[-(extension_length + n):-extension_length]
 
     def __only_new(self, segments):
         return list(filter(lambda s: s.title not in self.__downloaded, segments))
