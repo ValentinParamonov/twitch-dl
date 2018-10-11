@@ -69,13 +69,19 @@ def videos_of(user_id):
             headers=Twitch.client_id_header,
             onerror=lambda _: raise_error('Failed to get the videos list!')
         )
-        return response['data'], response['pagination']['cursor']
+        video_entries = response['data']
+        pagination = response['pagination']
+        cursor = pagination['cursor'] if 'cursor' in pagination else None
+        return video_entries, cursor
 
     videos, next_page = fetch_videos(None)
     while len(videos) > 0:
         for video in videos:
             yield video
-        videos, next_page = fetch_videos(next_page)
+        if next_page is not None:
+            videos, next_page = fetch_videos(next_page)
+        else:
+            videos = []
 
 
 def raise_error(message):
