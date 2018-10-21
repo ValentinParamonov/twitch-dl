@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 from argparse import ArgumentParser
+from collections import OrderedDict
 from sys import stdin, stderr, stdout
 
 from twitch.constants import Twitch
@@ -16,7 +17,7 @@ def main():
         if args.list_attributes:
             list_attributes_of(videos[0])
         else:
-            print_attribute(videos, args.name)
+            print_attributes(videos, args.names)
     except ValueError as error:
         stderr.write(str(error) + os.linesep)
         exit(1)
@@ -32,10 +33,11 @@ def parse_args():
     parser.add_argument('video_name', nargs='?')
     parser.add_argument(
         '-n',
-        '--name',
-        metavar='NAME',
-        help='print video attribute by NAME (defaults to "id")',
-        default='id'
+        '--names',
+        metavar='NAMES',
+        help='print video attributes by their NAMES (defaults to "id")',
+        action='append',
+        default=['id']
     )
     parser.add_argument(
         '-l',
@@ -44,7 +46,9 @@ def parse_args():
         action='store_true',
         default=False
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    args.names = list(OrderedDict.fromkeys(args.names))
+    return args
 
 
 def matching_videos_of(user_id, video_name):
@@ -93,12 +97,16 @@ def list_attributes_of(video):
         stdout.write(attribute + os.linesep)
 
 
-def print_attribute(videos, attribute_name):
+def print_attributes(videos, attribute_names):
     for video in videos:
-        if attribute_name not in video:
-            raise ValueError('Video has no attribute "{}"'.format(attribute_name))
-        video_attribute = video[attribute_name]
-        stdout.write(video_attribute + os.linesep)
+        attribute_values = map(lambda a: get_attribute(video, a), attribute_names)
+        stdout.write(' '.join(attribute_values) + os.linesep)
+
+
+def get_attribute(video, attribute_name):
+    if attribute_name not in video:
+        raise ValueError('Video has no attribute "{}"'.format(attribute_name))
+    return video[attribute_name]
 
 
 if __name__ == '__main__':
