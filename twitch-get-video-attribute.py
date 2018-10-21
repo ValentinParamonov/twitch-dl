@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import os
 from argparse import ArgumentParser
-from collections import OrderedDict
 from sys import stdin, stderr, stdout
 
 from twitch.constants import Twitch
@@ -40,7 +39,7 @@ def parse_args():
             Specify multiple times for a list. (defaults to "id")
             """,
         action='append',
-        default=['id']
+        default=[]
     )
     parser.add_argument(
         '-l',
@@ -50,7 +49,7 @@ def parse_args():
         default=False
     )
     args = parser.parse_args()
-    args.name = list(OrderedDict.fromkeys(args.name))
+    args.name = args.name if len(args.name) != 0 else ['id']
     return args
 
 
