@@ -17,7 +17,7 @@ def main():
         if args.list_attributes:
             list_attributes_of(videos[0])
         else:
-            print_attributes(videos, args.names)
+            print_attributes(videos, args.name)
     except ValueError as error:
         stderr.write(str(error) + os.linesep)
         exit(1)
@@ -33,9 +33,12 @@ def parse_args():
     parser.add_argument('video_name', nargs='?')
     parser.add_argument(
         '-n',
-        '--names',
-        metavar='NAMES',
-        help='print video attributes by their NAMES (defaults to "id")',
+        '--name',
+        metavar='NAME',
+        help="""
+            print video attribute by it\'s NAME. 
+            Specify multiple times for a list. (defaults to "id")
+            """,
         action='append',
         default=['id']
     )
@@ -47,7 +50,7 @@ def parse_args():
         default=False
     )
     args = parser.parse_args()
-    args.names = list(OrderedDict.fromkeys(args.names))
+    args.name = list(OrderedDict.fromkeys(args.name))
     return args
 
 
