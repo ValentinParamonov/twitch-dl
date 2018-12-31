@@ -56,7 +56,7 @@ def parse_args():
 def matching_videos_of(user_id, video_name):
     videos = videos_of(user_id)
     matched_videos = list(filter(
-        lambda video: video['title'].strip().lower() == video_name.strip().lower(),
+        lambda video: video_name.strip().lower() in video['title'].strip().lower(),
         videos
     ))
     if len(matched_videos) == 0:
