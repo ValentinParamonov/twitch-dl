@@ -11,12 +11,13 @@ def main():
     try:
         args = parse_args()
         user_id = cmdline_or_stdin(args.user_id)
-        video_name = cmdline_or_stdin(args.video_name)
-        videos = matching_videos_of(user_id, video_name)
+        search_string = cmdline_or_stdin(args.search_string)
+        attribute_names = args.name
+        videos = matching_videos_of(user_id, search_string, attribute_names)
         if args.list_attributes:
             list_attributes_of(videos[0])
         else:
-            print_attributes(videos, args.name)
+            print_attributes(videos, attribute_names)
     except ValueError as error:
         stderr.write(str(error) + os.linesep)
         exit(1)
@@ -27,16 +28,18 @@ def cmdline_or_stdin(arg):
 
 
 def parse_args():
-    parser = ArgumentParser()
+    parser = ArgumentParser(
+        description="Search channel's past broadcast by name and any other attribute provided by the '-n' option"
+    )
     parser.add_argument('user_id', nargs='?')
-    parser.add_argument('video_name', nargs='?')
+    parser.add_argument('search_string', nargs='?')
     parser.add_argument(
         '-n',
         '--name',
         metavar='NAME',
         help="""
             print video attribute by it\'s NAME. 
-            Specify multiple times for a list. (defaults to "id")
+            Specify multiple times for a list. (defaults to "id, title")
             """,
         action='append',
         default=[]
@@ -49,16 +52,23 @@ def parse_args():
         default=False
     )
     args = parser.parse_args()
-    args.name = args.name if len(args.name) != 0 else ['id']
+    args.name = args.name if len(args.name) != 0 else ['id', 'title']
     return args
 
 
-def matching_videos_of(user_id, video_name):
+def matching_videos_of(user_id, search_string, attribute_names):
+    token = search_string.strip().lower()
+    attributes = set(attribute_names)
+
+    def matches(video):
+        return True in [
+            token in video[attribute].strip().lower()
+            for attribute in
+            attributes
+        ]
+
     videos = videos_of(user_id)
-    matched_videos = list(filter(
-        lambda video: video_name.strip().lower() in video['title'].strip().lower(),
-        videos
-    ))
+    matched_videos = list(filter(matches, videos))
     if len(matched_videos) == 0:
         raise ValueError('No matching videos found!')
     return matched_videos
@@ -102,7 +112,7 @@ def list_attributes_of(video):
 def print_attributes(videos, attribute_names):
     for video in videos:
         attribute_values = map(lambda a: get_attribute(video, a), attribute_names)
-        stdout.write(' '.join(attribute_values) + os.linesep)
+        stdout.write('|'.join(attribute_values) + os.linesep)
 
 
 def get_attribute(video, attribute_name):
