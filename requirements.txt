@@ -1,1 +1,3 @@
 m3u8<0.4
+requests<3.0
+aiohttp<3.6
