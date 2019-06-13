@@ -1,21 +1,16 @@
 #! /usr/bin/env python3
 
+import asyncio
 import os
 import re
 import signal
 import sys
 from optparse import OptionParser, OptionValueError
-from sys import stdout
 
 from twitch.playlist import Playlist as PlaylistFetcher
 from twitch.vod import Vod
-from util.contents import Contents
+from twitch.vod_downloader import VodDownloader
 from util.log import Log
-
-
-class Playlist:
-    def __init__(self, segments):
-        self.segments = segments
 
 
 class Chunks:
@@ -26,7 +21,7 @@ class Chunks:
             start_time,
             end_time
         )
-        return Playlist(list(map(lambda segment: segment.uri, clipped_segments)))
+        return list(map(lambda segment: segment.uri, clipped_segments))
 
     @staticmethod
     def __with_time(segments):
@@ -46,34 +41,9 @@ class Chunks:
         ]
 
 
-class ProgressBar:
-    def __init__(self, file_name, total_segments):
-        self.fileName = file_name
-        self.total = total_segments
-        self.current = 0
-        self.update_by(0)
-
-    def update_by(self, count):
-        self.current += count
-        percent_completed = self.current / self.total * 100
-        self.__print_bar(percent_completed)
-
-    def __print_bar(self, percent_completed):
-        stdout.write('\r' + ' ' * self.__get_console_width())
-        stdout.write('\r{file} [{percents:3.0f}%]{terminator}'.format(
-            file=self.fileName,
-            percents=percent_completed,
-            terminator='\n' if self.current == self.total else ''))
-
-    @staticmethod
-    def __get_console_width():
-        _, width = os.popen('stty size', 'r').read().split()
-        return int(width)
-
-
 class CommandLineParser:
     time_pattern = \
-        '^(((?P<h>0{1,2}|[1-9]\d*):)?((?P<m>[0-5]?[0-9]):))?(?P<s>[0-5]?[0-9])$'
+        '^(((?P<h>0{1,2}|[1-9]\\d*):)?((?P<m>[0-5]?[0-9]):))?(?P<s>[0-5]?[0-9])$'
 
     def __init__(self):
         parser = OptionParser()
@@ -125,42 +95,21 @@ class FileMaker:
         return desired_name if modifier == 0 else new_name
 
 
-class PlaylistDownloader:
-    def __init__(self, playlist: Playlist):
-        self.playlist = playlist
-        self.stopped = False
-
-    def download_to(self, file_name):
-        playlist = self.playlist
-        progress_bar = ProgressBar(file_name, len(playlist.segments))
-        with open(file_name, 'wb+') as file:
-            for segment in playlist.segments:
-                if self.stopped:
-                    print('')
-                    break
-                try:
-                    for chunk in Contents.chunked(segment):
-                        if chunk:
-                            file.write(chunk)
-                except IOError as e:
-                    Log.fatal(str(e))
-                progress_bar.update_by(1)
-
-    def stop(self):
-        self.stopped = True
-
-
-def main():
+async def main():
     (start_time, end_time, vod_id) = CommandLineParser().parse_command_line()
     m3u8_playlist = PlaylistFetcher().fetch_for_vod(vod_id)
     if m3u8_playlist is None:
         Log.fatal("Seems like vod {} doesn't exist".format(vod_id))
-    playlist = Chunks.get(m3u8_playlist.segments, start_time, end_time)
+    vod_segments = Chunks.get(m3u8_playlist.segments, start_time, end_time)
     file_name = FileMaker.make_avoiding_overwrite(Vod.title(vod_id) + '.ts')
-    downloader = PlaylistDownloader(playlist)
+    downloader = VodDownloader(vod_segments)
     signal.signal(signal.SIGINT, lambda sig, frame: downloader.stop())
-    downloader.download_to(file_name)
+    await downloader.download_to(file_name)
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        Log.info('Interrupted')
+        exit(1)

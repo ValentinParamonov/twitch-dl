@@ -2,16 +2,16 @@ from http import HTTPStatus
 
 from aiohttp import ClientSession
 
-from util.log import Log
 from util.singleton import Singleton
 
 
 class AsyncContents(metaclass=Singleton):
+    _MAX_CHUNK_SIZE = 65536  # 64KB
     _session: ClientSession = None
 
     async def __aenter__(self):
-        assert self._session is None, 'this object was entered already'
-        self._session = ClientSession()
+        if self._session is None:
+            self._session = ClientSession()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -57,8 +57,7 @@ class AsyncContents(metaclass=Singleton):
             response = await self._session.head(resource, allow_redirects=True)
             return (await self.__check_ok(response)).headers
         except Exception as e:
-            Log.fatal(str(e))
-            exit(1)
+            raise e
 
     async def __get(self, resource, params=None, headers=None):
         try:
@@ -70,20 +69,18 @@ class AsyncContents(metaclass=Singleton):
                 chunked=True
             )
         except Exception as e:
-            Log.fatal(str(e))
-            exit(1)
+            raise e
 
-    async def __check_ok(self, response):
+    @staticmethod
+    async def __check_ok(response):
         if response.status != HTTPStatus.OK:
-            Log.fatal(
-                'Failed to get {url}: got {statusCode} response'.format(
-                    url=response.url,
-                    statusCode=response.status
-                )
+            error_message = 'Failed to get {url}: got {statusCode} response'.format(
+                url=response.url,
+                statusCode=response.status
             )
-            exit(1)
+            raise Exception(error_message)
         return response
 
     async def chunked(self, resource):
         response = await self.__get_ok(resource)
-        return await response.content.readchunk()
+        return response.content.iter_chunked(self._MAX_CHUNK_SIZE)
