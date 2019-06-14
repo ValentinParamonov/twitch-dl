@@ -74,9 +74,10 @@ class AsyncContents(metaclass=Singleton):
     @staticmethod
     async def __check_ok(response):
         if response.status != HTTPStatus.OK:
-            error_message = 'Failed to get {url}: got {statusCode} response'.format(
+            error_message = 'Failed to get {url}: got {statusCode} ({statusMessage})'.format(
                 url=response.url,
-                statusCode=response.status
+                statusCode=response.status,
+                statusMessage=response.reason,
             )
             raise Exception(error_message)
         return response
