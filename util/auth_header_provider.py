@@ -5,6 +5,8 @@ from util.contents import Contents
 from util.log import Log
 
 
+# Expecting the credentials file to be a text file with
+# client_id on the first line and client_secret on the second
 class AuthHeaderProvider:
     @classmethod
     def authenticate(cls):
