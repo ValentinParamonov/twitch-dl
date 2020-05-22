@@ -57,7 +57,6 @@ class Contents:
             return cls.__check_ok(requests.head(resource)).headers
         except Exception as e:
             Log.fatal(str(e))
-            exit(1)
 
     @staticmethod
     def __get(resource, params=None, headers=None):
@@ -70,7 +69,6 @@ class Contents:
             )
         except Exception as e:
             Log.fatal(str(e))
-            exit(1)
 
     @staticmethod
     def __check_ok(response, onerror=None):
@@ -82,7 +80,6 @@ class Contents:
                         statusCode=response.status_code
                     )
                 )
-                exit(1)
             else:
                 return Error(onerror(response.status_code))
         return response
@@ -90,3 +87,22 @@ class Contents:
     @classmethod
     def chunked(cls, resource, onerror=None):
         return cls.__get_ok(resource, onerror=onerror).iter_content(chunk_size=2097152)
+
+    @classmethod
+    def post(cls, resource, params=None, headers=None, onerror=None):
+        return cls.__check_ok(
+            cls.__post(resource, params=params, headers=headers),
+            onerror=onerror
+        )
+
+    @classmethod
+    def __post(cls, resource, params, headers):
+        try:
+            return requests.post(
+                resource,
+                params=params,
+                headers=headers,
+                stream=True
+            )
+        except Exception as e:
+            Log.fatal(str(e))

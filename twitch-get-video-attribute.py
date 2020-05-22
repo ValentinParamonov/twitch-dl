@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 from sys import stdin, stderr, stdout
 
 from twitch.constants import Twitch
+from util.auth_header_provider import AuthHeaderProvider
 from util.contents import Contents
 
 
@@ -75,14 +76,16 @@ def matching_videos_of(user_id, search_string, attribute_names):
 
 
 def videos_of(user_id):
+    auth_header = AuthHeaderProvider.authenticate()
+
     def fetch_videos(cursor):
         params = {'user_id': user_id, 'first': 100}
         if cursor:
             params['after'] = cursor
         response = Contents.json(
-            'https://api.twitch.tv/helix/videos',
+            Twitch.videos_url,
             params=params,
-            headers=Twitch.client_id_header,
+            headers=auth_header,
             onerror=lambda _: raise_error('Failed to get the videos list!')
         )
         video_entries = response['data']

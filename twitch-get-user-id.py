@@ -3,6 +3,7 @@ import os
 import sys
 
 from twitch.constants import Twitch
+from util.auth_header_provider import AuthHeaderProvider
 from util.contents import Contents
 
 
@@ -25,9 +26,9 @@ def user_id_of(channel_name):
 
 def user_data_for(channel_name):
     return Contents.json(
-        'https://api.twitch.tv/helix/users',
+        Twitch.users_url,
         params={'login': channel_name},
-        headers=Twitch.client_id_header,
+        headers=AuthHeaderProvider.authenticate(),
         onerror=lambda _: raise_error('Failed to get the users list!')
     )
 
