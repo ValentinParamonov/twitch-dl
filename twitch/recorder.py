@@ -7,6 +7,7 @@ from time import sleep
 
 from twitch.constants import Twitch
 from twitch.playlist import Playlist
+from util.auth_header_provider import AuthHeaderProvider
 from util.contents import Contents
 from util.log import Log
 from util.stopwatch import Stopwatch
@@ -51,14 +52,15 @@ class Recorder:
             Log.info('Stopped.')
 
     @staticmethod
-    def __lookup_stream(channel):
+    def __lookup_stream_name(channel):
         response = Contents.json(
-            Twitch.stream_link.format(channel),
-            headers=Twitch.client_id_header
+            Twitch.stream_link,
+            params={'user_login': channel},
+            headers=AuthHeaderProvider.authenticate(),
         )
-        if response['stream'] is None:
+        if response['data'] is None or len(response['data']) == 0:
             return None
-        return response['stream']['channel']['status']
+        return response['data'][0]['title']
 
     @staticmethod
     def __next_vacant(file_name: str):
@@ -109,7 +111,7 @@ class Recorder:
     def __rename_recording_if_stream_name_became_known_for(self, channel):
         if self.__stream_name:
             return
-        self.__stream_name = self.__lookup_stream(channel)
+        self.__stream_name = self.__lookup_stream_name(channel)
         if self.__stream_name is None:
             return
         Log.info('Recording ' + self.__stream_name)

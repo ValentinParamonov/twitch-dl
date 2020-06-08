@@ -3,13 +3,15 @@
 from sys import argv, stdout, stderr, exit
 
 from twitch.constants import Twitch
+from util.auth_header_provider import AuthHeaderProvider
 from util.contents import Contents
 
 
 def fetch_stream(channel):
     response = Contents.json(
-        Twitch.stream_link.format(channel),
-        headers=Twitch.client_id_header
+        Twitch.stream_link,
+        params={'user_login': channel},
+        headers=AuthHeaderProvider.authenticate()
     )
     if response['stream'] is None:
         return None
