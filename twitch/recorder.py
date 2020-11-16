@@ -25,27 +25,30 @@ class Recorder:
 
     def record(self, channel):
         consecutive_times_received_no_new_segments = 0
+        notified_about_running_ad = False
         while self.__recording:
             self.__stopwatch.split()
-            segments = self.__fetch_segments(channel)
-            if len(segments) == 0:
-                if len(self.__downloaded) == 0:
-                    Log.fatal('Seems like the channel is offline')
-                break
-            new_segments = self.__only_new(segments)
-            if len(new_segments) == 0:
-                consecutive_times_received_no_new_segments += 1
-                if consecutive_times_received_no_new_segments == 3:
+            ad_running, segments = self.__fetch_segments(channel)
+            if not ad_running:
+                if len(segments) == 0:
+                    if len(self.__downloaded) == 0:
+                        Log.fatal('Seems like the channel is offline')
                     break
-            else:
-                consecutive_times_received_no_new_segments = 0
-            self.__write(new_segments)
-            self.__check_if_segments_lost(segments)
-            self.__store_downloaded(new_segments)
-            self.__rename_recording_if_stream_name_became_known_for(channel)
-            time_to_sleep = self.__sleep_seconds - 2 * self.__stopwatch.split()
-            if time_to_sleep > 0:
-                sleep(time_to_sleep)
+                new_segments = self.__only_new(segments)
+                if len(new_segments) == 0:
+                    consecutive_times_received_no_new_segments += 1
+                    if consecutive_times_received_no_new_segments == 3:
+                        break
+                else:
+                    consecutive_times_received_no_new_segments = 0
+                self.__write(new_segments)
+                self.__check_if_segments_lost(segments)
+                self.__store_downloaded(new_segments)
+                self.__rename_recording_if_stream_name_became_known_for(channel)
+            elif not notified_about_running_ad:
+                Log.info('Waiting for an ad to stop')
+                notified_about_running_ad = True
+            self.__sleep_if_needed()
         if self.__recording:
             Log.info('Broadcast ended.')
         else:
@@ -74,10 +77,12 @@ class Recorder:
         playlist = self.__playlist.fetch_for_channel(channel)
         if playlist is None:
             return []
-        segments = playlist.segments
+        segments = list(filter(lambda s: s.title == Twitch.stream_segment_title, playlist.segments))
+        if len(playlist.segments) != 0 and len(segments) == 0:
+            return True, []
         for segment in segments:
             segment.title = self.strip_extension_and_take_last_n_chars(segment.uri, 16)
-        return segments
+        return False, segments
 
     @staticmethod
     def strip_extension_and_take_last_n_chars(uri, n):
@@ -118,6 +123,11 @@ class Recorder:
         old_file_name = self.__file_name
         self.__file_name = self.__next_vacant(self.__stream_name + '.ts')
         os.rename(old_file_name, self.__file_name)
+
+    def __sleep_if_needed(self):
+        time_to_sleep = self.__sleep_seconds - 2 * self.__stopwatch.split()
+        if time_to_sleep > 0:
+            sleep(time_to_sleep)
 
     def stop(self):
         self.__recording = False

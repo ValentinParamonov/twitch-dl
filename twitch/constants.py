@@ -8,3 +8,4 @@ class Twitch:
     auth_token_url = 'https://id.twitch.tv/oauth2/token?grant_type=client_credentials&client_id={client_id}&client_secret={client_secret}'
     users_url = 'https://api.twitch.tv/helix/users'
     videos_url = 'https://api.twitch.tv/helix/videos'
+    stream_segment_title = 'live'
