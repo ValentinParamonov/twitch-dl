@@ -6,7 +6,7 @@ from util.contents import Contents
 
 
 class Token:
-    __expiration_buffer_ms = 200
+    __expiration_buffer_ms = 5000
 
     def __init__(self):
         self.__token = None
