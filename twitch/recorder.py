@@ -77,7 +77,8 @@ class Recorder:
         playlist = self.__playlist.fetch_for_channel(channel)
         if playlist is None:
             return []
-        segments = list(filter(lambda s: s.title == Twitch.stream_segment_title, playlist.segments))
+        segments = list(
+            filter(lambda s: s.title == Twitch.stream_segment_title, playlist.segments))
         if len(playlist.segments) != 0 and len(segments) == 0:
             return True, []
         for segment in segments:
@@ -121,7 +122,9 @@ class Recorder:
             return
         Log.info('Recording ' + self.__stream_name)
         old_file_name = self.__file_name
-        self.__file_name = self.__next_vacant(self.__stream_name + '.ts')
+        self.__file_name = self.__next_vacant(
+            self.__stream_name.replace('/', '') + '.ts'
+        )
         os.rename(old_file_name, self.__file_name)
 
     def __sleep_if_needed(self):
