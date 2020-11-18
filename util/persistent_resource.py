@@ -5,7 +5,7 @@ from os import path
 
 class PersistentJsonResource:
     def __init__(self, file_name):
-        self.__file_name = file_name
+        self.__file_name = path.expanduser(file_name)
         self.__value = None
 
     def value(self):
@@ -18,7 +18,12 @@ class PersistentJsonResource:
 
     def store(self, value):
         if value:
+            self.__value = value
             os.makedirs(path.dirname(self.__file_name), exist_ok=True)
             with open(self.__file_name, 'w') as resource_file:
                 json.dump(value, resource_file)
-            self.__value = value
+
+    def clear(self):
+        self.__value = None
+        if path.isfile(self.__file_name):
+            os.remove(self.__file_name)

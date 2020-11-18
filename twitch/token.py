@@ -1,5 +1,4 @@
 import json
-from os import path
 from time import time
 
 from twitch.constants import Twitch
@@ -9,20 +8,18 @@ from util.persistent_resource import PersistentJsonResource
 
 class Token:
     __expiration_buffer_seconds = 5
-    __token_file_name = '~/.cache/twitch-dl/{}'
+    __token_file_name = '~/.cache/twitch-dl/{}.json'
 
     def __init__(self):
         self.__token_resource = None
 
     def fetch_for_channel(self, channel_name):
         if not self.__token_resource:
-            token_file_name = path.expanduser(
-                self.__token_file_name.format(channel_name)
-            )
+            token_file_name = self.__token_file_name.format(channel_name)
             self.__token_resource = PersistentJsonResource(token_file_name)
         if not self.__token_resource.value() or \
                 self.__is_expired(self.__token_resource.value()):
-            self.fetch_and_store_token(channel_name)
+            self.__fetch_and_store_token(channel_name)
         return self.__token_resource.value()
 
     @staticmethod
@@ -38,7 +35,7 @@ class Token:
             onerror=lambda _: None
         )
 
-    def fetch_and_store_token(self, channel_name):
+    def __fetch_and_store_token(self, channel_name):
         token = self.__fetch(Twitch.channel_token_link.format(channel_name))
         if token:
             self.__token_resource.store(token)
