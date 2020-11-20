@@ -23,7 +23,7 @@ class Token:
         return self.__token_resource.value()
 
     @classmethod
-    def __is_expired(token):
+    def __is_expired(cls, token):
         token_expiration_ms = json.loads(token['token'])['expires']
         return token_expiration_ms - cls.__expiration_buffer_seconds < time()
 
