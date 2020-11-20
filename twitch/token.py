@@ -22,13 +22,13 @@ class Token:
             self.__fetch_and_store_token(channel_name)
         return self.__token_resource.value()
 
-    @staticmethod
+    @classmethod
     def __is_expired(token):
         token_expiration_ms = json.loads(token['token'])['expires']
-        return token_expiration_ms + Token.__expiration_buffer_seconds < time()
+        return token_expiration_ms - cls.__expiration_buffer_seconds < time()
 
-    @classmethod
-    def __fetch(cls, link):
+    @staticmethod
+    def __fetch(link):
         return Contents.json(
             link,
             headers=Twitch.client_id_header,
