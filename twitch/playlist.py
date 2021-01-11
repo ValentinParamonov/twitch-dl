@@ -56,6 +56,7 @@ class Playlist:
     def fetch_for_vod(self, vod_id):
         token = Token.fetch_for_vod(vod_id)
         playlist_link = Twitch.vod_playlist_link.format(vod_id)
+        self.__best_quality_link_resource = PersistentJsonResource('/dev/null')
         playlist = self.__fetch_playlist(playlist_link, token)
         playlist.base_path = self.__best_quality_link_resource.value().rsplit('/', 1)[0]
         return playlist
