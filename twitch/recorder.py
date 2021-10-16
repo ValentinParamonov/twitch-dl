@@ -66,12 +66,12 @@ class Recorder:
         return response['data'][0]['title']
 
     @staticmethod
-    def __next_vacant(file_name: str):
-        new_name = file_name
+    def __next_vacant(stream_name, extension):
+        new_name = stream_name
         for i in itertools.count(1):
-            if not os.path.isfile(new_name):
-                return new_name
-            new_name = re.sub(r'(\..+)$', r' {:02}\1'.format(i), file_name)
+            if not os.path.isfile(new_name + extension):
+                return new_name + extension
+            new_name = stream_name + f' {i:02}'
 
     def __fetch_segments(self, channel):
         playlist = self.__playlist.fetch_for_channel(channel)
@@ -119,7 +119,8 @@ class Recorder:
         Log.info('Recording ' + self.__stream_name)
         old_file_name = self.__file_name
         self.__file_name = self.__next_vacant(
-            self.__stream_name.strip().replace('/', '') + '.ts'
+            self.__stream_name.strip().replace('/', ''),
+            '.ts'
         )
         os.rename(old_file_name, self.__file_name)
 
