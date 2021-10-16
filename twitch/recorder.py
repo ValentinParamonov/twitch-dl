@@ -82,13 +82,9 @@ class Recorder:
         if len(playlist.segments) != 0 and len(segments) == 0:
             return True, []
         for segment in segments:
-            segment.title = self.strip_extension_and_take_last_n_chars(segment.uri, 16)
+            # taking 10 characters before the common part at the end of the URL
+            segment.title = segment.uri[-29:-19]
         return False, segments
-
-    @staticmethod
-    def strip_extension_and_take_last_n_chars(uri, n):
-        extension_length = 3
-        return uri[-(extension_length + n):-extension_length]
 
     def __only_new(self, segments):
         return list(filter(lambda s: s.title not in self.__downloaded, segments))
