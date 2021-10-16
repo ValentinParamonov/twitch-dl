@@ -119,7 +119,7 @@ class Recorder:
         Log.info('Recording ' + self.__stream_name)
         old_file_name = self.__file_name
         self.__file_name = self.__next_vacant(
-            self.__stream_name.replace('/', '') + '.ts'
+            self.__stream_name.strip().replace('/', '') + '.ts'
         )
         os.rename(old_file_name, self.__file_name)
 
