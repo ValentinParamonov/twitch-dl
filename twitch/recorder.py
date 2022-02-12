@@ -1,6 +1,6 @@
 import itertools
 import os
-import re
+import pickle
 import uuid
 from collections import deque
 from time import sleep
@@ -16,7 +16,8 @@ from util.stopwatch import Stopwatch
 class Recorder:
     def __init__(self):
         self.__recording = True
-        self.__downloaded = deque(maxlen=32)
+        self.__downloaded = None
+        self.__buffer_file_name = None
         self.__stopwatch = Stopwatch()
         self.__sleep_seconds = 5
         self.__file_name = uuid.uuid4().hex + '.ts'
@@ -26,6 +27,7 @@ class Recorder:
     def record(self, channel):
         consecutive_times_received_no_new_segments = 0
         notified_about_running_ad = False
+        self.__init_segments_buffer(channel)
         while self.__recording:
             self.__stopwatch.split()
             ad_running, segments = self.__fetch_segments(channel)
@@ -49,10 +51,25 @@ class Recorder:
                 Log.info('Waiting for an ad to stop')
                 notified_about_running_ad = True
             self.__sleep_if_needed()
+        self.__store_segments_buffer()
         if self.__recording:
             Log.info('Broadcast ended.')
         else:
             Log.info('Stopped.')
+
+    def __init_segments_buffer(self, channel_name):
+        cache_dir = os.environ.get('XDG_CACHE_HOME')
+        if not cache_dir:
+            cache_dir = os.path.expanduser('~/.cache')
+        self.__buffer_file_name = f'{cache_dir}/twitch-dl/{channel_name}.buff'
+        self.__downloaded = self.__load_buffer_from_file(self.__buffer_file_name)
+
+    @staticmethod
+    def __load_buffer_from_file(buffer_file_name):
+        if os.path.exists(buffer_file_name):
+            with open(buffer_file_name, 'rb') as buffer_file:
+                return pickle.load(buffer_file)
+        return deque(maxlen=32)
 
     @staticmethod
     def __lookup_stream_name(channel):
@@ -71,7 +88,7 @@ class Recorder:
         for i in itertools.count(1):
             if not os.path.isfile(new_name + extension):
                 return new_name + extension
-            new_name = stream_name + f' {i:02}'
+            new_name = f'{stream_name} {i:02}'
 
     def __fetch_segments(self, channel):
         playlist = self.__playlist.fetch_for_channel(channel)
@@ -128,6 +145,10 @@ class Recorder:
         time_to_sleep = self.__sleep_seconds - 2 * self.__stopwatch.split()
         if time_to_sleep > 0:
             sleep(time_to_sleep)
+
+    def __store_segments_buffer(self):
+        with open(self.__buffer_file_name, 'wb') as buffer_file:
+            pickle.dump(self.__downloaded, buffer_file)
 
     def stop(self):
         self.__recording = False
