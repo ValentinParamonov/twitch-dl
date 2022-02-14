@@ -37,15 +37,15 @@ class Recorder:
                         Log.fatal('Seems like the channel is offline')
                     break
                 new_segments = self.__only_new(segments)
-                if len(new_segments) == 0:
+                if len(new_segments) != 0:
+                    consecutive_times_received_no_new_segments = 0
+                    self.__write(new_segments)
+                    self.__check_if_segments_lost(segments)
+                    self.__store_downloaded(new_segments)
+                else:
                     consecutive_times_received_no_new_segments += 1
                     if consecutive_times_received_no_new_segments == 3:
                         break
-                else:
-                    consecutive_times_received_no_new_segments = 0
-                self.__write(new_segments)
-                self.__check_if_segments_lost(segments)
-                self.__store_downloaded(new_segments)
                 self.__rename_recording_if_stream_name_became_known_for(channel)
             elif not notified_about_running_ad:
                 Log.info('Waiting for an ad to stop')
