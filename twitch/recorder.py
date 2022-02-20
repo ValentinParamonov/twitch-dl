@@ -9,6 +9,7 @@ from twitch.constants import Twitch
 from twitch.playlist import Playlist
 from util.auth_header_provider import AuthHeaderProvider
 from util.contents import Contents
+from util.file import File
 from util.log import Log
 from util.stopwatch import Stopwatch
 
@@ -65,9 +66,9 @@ class Recorder:
         self.__downloaded = self.__load_buffer_from_file(self.__buffer_file_name)
 
     @staticmethod
-    def __load_buffer_from_file(buffer_file_name):
-        if os.path.exists(buffer_file_name):
-            with open(buffer_file_name, 'rb') as buffer_file:
+    def __load_buffer_from_file(file_name):
+        if File.exists(file_name) and not File.age_in_seconds(file_name) > 60:
+            with open(file_name, 'rb') as buffer_file:
                 return pickle.load(buffer_file)
         return deque(maxlen=32)
 
