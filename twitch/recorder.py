@@ -1,5 +1,4 @@
 import itertools
-import os
 import pickle
 import uuid
 from collections import deque
@@ -59,10 +58,7 @@ class Recorder:
             Log.info('Stopped.')
 
     def __init_segments_buffer(self, channel_name):
-        cache_dir = os.environ.get('XDG_CACHE_HOME')
-        if not cache_dir:
-            cache_dir = os.path.expanduser('~/.cache')
-        self.__buffer_file_name = f'{cache_dir}/twitch-dl/{channel_name}.buff'
+        self.__buffer_file_name = f'{File.user_cache_dir()}/twitch-dl/{channel_name}.buff'
         self.__downloaded = self.__load_buffer_from_file(self.__buffer_file_name)
 
     @staticmethod
@@ -87,7 +83,7 @@ class Recorder:
     def __next_vacant(stream_name, extension):
         new_name = stream_name
         for i in itertools.count(1):
-            if not os.path.isfile(new_name + extension):
+            if not File.isfile(new_name + extension):
                 return new_name + extension
             new_name = f'{stream_name} {i:02}'
 
@@ -140,8 +136,8 @@ class Recorder:
             self.__stream_name.strip().replace('/', ''),
             '.ts'
         )
-        if os.path.exists(old_file_name):
-            os.rename(old_file_name, self.__file_name)
+        if File.exists(old_file_name):
+            File.rename(old_file_name, self.__file_name)
 
     def __sleep_if_needed(self):
         time_to_sleep = self.__sleep_seconds - 2 * self.__stopwatch.split()
