@@ -139,7 +139,8 @@ class Recorder:
             self.__stream_name.strip().replace('/', ''),
             '.ts'
         )
-        os.rename(old_file_name, self.__file_name)
+        if os.path.exists(old_file_name):
+            os.rename(old_file_name, self.__file_name)
 
     def __sleep_if_needed(self):
         time_to_sleep = self.__sleep_seconds - 2 * self.__stopwatch.split()
